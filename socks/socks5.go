@@ -121,6 +121,17 @@ func WriteMethod(method uint8, w io.Writer) error {
 	return err
 }
 
+// WriteMethods send method select request to the server
+func WriteMethods(methods []uint8, w io.Writer) error {
+	b := make([]byte, 2+len(methods))
+	b[0] = Version
+	b[1] = uint8(len(methods))
+	copy(b[2:], methods)
+
+	_, err := w.Write(b)
+	return err
+}
+
 /*
 Addr has following struct
  +------+----------+----------+

@@ -1,18 +1,21 @@
 package main
 
 import (
+	"os"
+
+	"github.com/luyuhuang/subsocks/client"
 	"github.com/luyuhuang/subsocks/server"
 )
 
 func main() {
-	ser := server.NewServer()
-
-	// cert, err := tls.LoadX509KeyPair("server.crt", "server.key")
-	// if err != nil {
-	// 	fmt.Println("error", err)
-	// 	return
-	// }
-	// ser.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
-
-	ser.Serve("http", "127.0.0.1:1234")
+	switch os.Args[1] {
+	case "server":
+		server.NewServer("http", "127.0.0.1:1234").Serve()
+	case "client":
+		cli := client.NewClient("127.0.0.1:4321")
+		cli.Config.ServerProtocol = "http"
+		cli.Config.ServerAddr = "127.0.0.1:1234"
+		cli.Config.HTTPPath = "/"
+		cli.Serve()
+	}
 }

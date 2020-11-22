@@ -22,7 +22,7 @@ type httpStripper struct {
 	net.Conn
 	server *Server
 	buf    *bytes.Buffer
-	ioBuf  *bufio.ReadWriter
+	ioBuf  *bufio.Reader
 }
 
 func newHTTPStripper(server *Server, conn net.Conn) *httpStripper {
@@ -30,47 +30,41 @@ func newHTTPStripper(server *Server, conn net.Conn) *httpStripper {
 		Conn:   conn,
 		server: server,
 		buf:    bytes.NewBuffer(make([]byte, 0, 1024)),
-		ioBuf:  bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
+		ioBuf:  bufio.NewReader(conn),
 	}
 }
 
-func (h *httpStripper) Read(b []byte) (int, error) {
+func (h *httpStripper) Read(b []byte) (n int, err error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
 
-	p, err := h.buf.Read(b)
-	if err != nil && err != io.EOF {
-		return p, err
+	if h.buf.Len() > 0 {
+		return h.buf.Read(b)
 	}
 
-	b = b[p:]
-	for len(b) > 0 {
-		req, err := http.ReadRequest(h.ioBuf.Reader)
+	var req *http.Request
+	for {
+		req, err = http.ReadRequest(h.ioBuf)
 		if err != nil {
-			if err == io.EOF {
-				h.Close()
-			}
-			return p, err
+			return 0, err
 		}
-		if req.URL.Path != h.server.HTTPConfig.path {
-			continue
+		if req.URL.Path != h.server.Config.HTTPPath {
+			req.Body.Close()
+		} else {
+			break
 		}
-
-		n, err := req.Body.Read(b)
-		if err != nil {
-			return p, err
-		}
-
-		b = b[n:]
-		p += n
-
-		if _, err = h.buf.ReadFrom(req.Body); err != nil && err != io.EOF {
-			return p, err
-		}
-		req.Body.Close()
 	}
-	return p, nil
+	defer req.Body.Close()
+
+	if n, err = req.Body.Read(b); err != nil && err != io.EOF {
+		return
+	}
+	if _, err = h.buf.ReadFrom(req.Body); err != nil && err != io.EOF {
+		return
+	}
+	err = nil
+	return
 }
 
 func (h *httpStripper) Write(b []byte) (n int, err error) {
@@ -80,10 +74,8 @@ func (h *httpStripper) Write(b []byte) (n int, err error) {
 		ContentLength: int64(len(b)),
 		Body:          ioutil.NopCloser(bytes.NewBuffer(b)),
 	}
-	res.Write(h.ioBuf)
-	return 0, nil
-}
-
-type httpConfig struct {
-	path string
+	if err := res.Write(h.Conn); err != nil {
+		return 0, err
+	}
+	return len(b), nil
 }

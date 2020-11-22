@@ -1,11 +1,11 @@
 package server
 
 import (
-	"io"
 	"log"
 	"net"
 
 	"github.com/luyuhuang/subsocks/socks"
+	"github.com/luyuhuang/subsocks/utils"
 )
 
 func (s *Server) socksHandler(conn net.Conn) {
@@ -14,7 +14,7 @@ func (s *Server) socksHandler(conn net.Conn) {
 	// select method
 	methods, err := socks.ReadMethods(conn)
 	if err != nil {
-		log.Fatalf("Read methods failed: %s", err)
+		log.Printf("Read methods failed: %s", err)
 		return
 	}
 	method := socks.MethodNoAcceptable
@@ -25,9 +25,9 @@ func (s *Server) socksHandler(conn net.Conn) {
 	}
 	if err := socks.WriteMethod(method, conn); err != nil || method == socks.MethodNoAcceptable {
 		if err != nil {
-			log.Fatalf("Write method failed: %s", err)
+			log.Printf("Write method failed: %s", err)
 		} else {
-			log.Fatalf("Methods is not acceptable")
+			log.Printf("Methods is not acceptable")
 		}
 		return
 	}
@@ -35,7 +35,7 @@ func (s *Server) socksHandler(conn net.Conn) {
 	// read command
 	request, err := socks.ReadRequest(conn)
 	if err != nil {
-		log.Fatalf("Read command failed: %s", err)
+		log.Printf("Read command failed: %s", err)
 		return
 	}
 	switch request.Cmd {
@@ -45,9 +45,9 @@ func (s *Server) socksHandler(conn net.Conn) {
 		s.handleBind(conn, request)
 	case socks.CmdUDP:
 		// unsupported, since the server based on TCP. using CmdUDPOverTCP instad.
-		log.Fatalf("Unsupported command CmdUDP")
+		log.Printf("Unsupported command CmdUDP")
 		if err := socks.NewReply(socks.CmdUnsupported, nil).Write(conn); err != nil {
-			log.Fatalf("Write reply failed: %s", err)
+			log.Printf("Write reply failed: %s", err)
 		}
 		return
 	case socks.CmdUDPOverTCP:
@@ -58,20 +58,21 @@ func (s *Server) socksHandler(conn net.Conn) {
 func (s *Server) handleConnect(conn net.Conn, req *socks.Request) {
 	cc, err := net.Dial("tcp", req.Addr.String())
 	if err != nil {
+		log.Printf("Dial remote failed: %s", err)
 		if err := socks.NewReply(socks.HostUnreachable, nil).Write(conn); err != nil {
-			log.Fatalf("Write reply failed: %s", err)
+			log.Printf("Write reply failed: %s", err)
 		}
 		return
 	}
 	defer cc.Close()
 
 	if err := socks.NewReply(socks.Succeeded, nil).Write(conn); err != nil {
-		log.Fatalf("Write reply failed: %s", err)
+		log.Printf("Write reply failed: %s", err)
 		return
 	}
 
-	if err := transport(conn, cc); err != nil {
-		log.Fatalf("Transport failed: %s", err)
+	if err := utils.Transport(conn, cc); err != nil {
+		log.Printf("Transport failed: %s", err)
 		return
 	}
 }
@@ -82,22 +83,4 @@ func (s *Server) handleBind(conn net.Conn, req *socks.Request) {
 
 func (s *Server) handleUDPOverTCP(conn net.Conn, req *socks.Request) {
 
-}
-
-func transport(rw1, rw2 io.ReadWriter) error {
-	errc := make(chan error, 1)
-	go func() {
-		_, err := io.Copy(rw1, rw2)
-		errc <- err
-	}()
-
-	go func() {
-		_, err := io.Copy(rw2, rw1)
-		errc <- err
-	}()
-
-	if err := <-errc; err != nil && err == io.EOF {
-		return err
-	}
-	return nil
 }

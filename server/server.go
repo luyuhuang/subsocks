@@ -8,29 +8,34 @@ import (
 
 // Server holds contexts of the server
 type Server struct {
-	TLSConfig  *tls.Config
-	HTTPConfig httpConfig
+	Config    *Config
+	TLSConfig *tls.Config
 }
 
 // NewServer creates a server
-func NewServer() *Server {
-	return &Server{}
+func NewServer(protocol, addr string) *Server {
+	return &Server{
+		Config: &Config{
+			Protocol: protocol,
+			Addr:     addr,
+		},
+	}
 }
 
-var protocol2dict = map[string]func(*Server, net.Conn){
+var protocol2handler = map[string]func(*Server, net.Conn){
 	"https": (*Server).httpsHandler,
 	"http":  (*Server).httpHandler,
 	"socks": (*Server).socksHandler,
 }
 
 // Serve start the server
-func (s *Server) Serve(protocol string, addr string) error {
-	handler, ok := protocol2dict[protocol]
+func (s *Server) Serve() error {
+	handler, ok := protocol2handler[s.Config.Protocol]
 	if !ok {
 		return errors.New("Unknow protocol")
 	}
 
-	laddr, err := net.ResolveTCPAddr("tcp", addr)
+	laddr, err := net.ResolveTCPAddr("tcp", s.Config.Addr)
 	if err != nil {
 		return err
 	}
@@ -47,4 +52,11 @@ func (s *Server) Serve(protocol string, addr string) error {
 
 		go handler(s, conn)
 	}
+}
+
+// Config is the server configuration
+type Config struct {
+	Protocol string
+	Addr     string
+	HTTPPath string
 }
