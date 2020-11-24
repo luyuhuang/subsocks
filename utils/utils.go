@@ -1,6 +1,23 @@
 package utils
 
-import "io"
+import (
+	"io"
+	"sync"
+)
+
+// buffer pools
+var (
+	SPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 576)
+		},
+	} // small buff pool
+	LPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 64*1024+262)
+		},
+	} // large buff pool for udp
+)
 
 // Transport rw1 and rw2
 func Transport(rw1, rw2 io.ReadWriter) error {

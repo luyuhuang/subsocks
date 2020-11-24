@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
+	"log"
 	"net"
 
 	"github.com/luyuhuang/subsocks/socks"
@@ -34,6 +35,7 @@ func (c *Client) Serve() error {
 	if err != nil {
 		return err
 	}
+	log.Printf("Client starts to listen %s", listener.Addr().String())
 
 	for {
 		conn, err := listener.Accept()
@@ -45,7 +47,7 @@ func (c *Client) Serve() error {
 	}
 }
 
-var protocol2wrapper = map[string]func(*Client, net.Conn) (net.Conn, error){
+var protocol2wrapper = map[string]func(*Client, net.Conn) net.Conn{
 	"https": (*Client).wrapHTTPS,
 	"http":  (*Client).wrapHTTP,
 	"socks": (*Client).wrapSocks,
@@ -61,28 +63,24 @@ func (c *Client) dialServer() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	newConn, err := wrapper(c, conn)
-	if err != nil {
+	conn = wrapper(c, conn)
+
+	// handshake
+	if err := socks.WriteMethods([]byte{socks.MethodNoAuth}, conn); err != nil {
 		conn.Close()
 		return nil, err
 	}
-
-	// handshake
-	if err := socks.WriteMethods([]byte{socks.MethodNoAuth}, newConn); err != nil {
-		newConn.Close()
-		return nil, err
-	}
 	buf := make([]byte, 2)
-	if _, err := io.ReadFull(newConn, buf); err != nil {
-		newConn.Close()
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		conn.Close()
 		return nil, err
 	}
 	if buf[0] != socks.Version || buf[1] != socks.MethodNoAuth {
-		newConn.Close()
+		conn.Close()
 		return nil, errors.New("Handshake failed")
 	}
 
-	return newConn, nil
+	return conn, nil
 }
 
 // Config is the client configuration

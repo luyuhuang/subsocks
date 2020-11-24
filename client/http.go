@@ -11,12 +11,12 @@ import (
 	"net/url"
 )
 
-func (c *Client) wrapHTTPS(conn net.Conn) (net.Conn, error) {
+func (c *Client) wrapHTTPS(conn net.Conn) net.Conn {
 	return c.wrapHTTP(tls.Client(conn, c.TLSConfig))
 }
 
-func (c *Client) wrapHTTP(conn net.Conn) (net.Conn, error) {
-	return newHTTPWrapper(conn, c), nil
+func (c *Client) wrapHTTP(conn net.Conn) net.Conn {
+	return newHTTPWrapper(conn, c)
 }
 
 type httpWrapper struct {

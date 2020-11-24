@@ -3,13 +3,16 @@ package socks
 // This file is modified version from https://github.com/ginuerzh/gosocks5/blob/master/socks5.go
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"strconv"
-	"sync"
+
+	"github.com/luyuhuang/subsocks/utils"
 )
 
 // Version = 5
@@ -61,20 +64,6 @@ var (
 	ErrAuthFailure = errors.New("Auth failure")
 )
 
-// buffer pools
-var (
-	sPool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, 576)
-		},
-	} // small buff pool
-	lPool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, 64*1024+262)
-		},
-	} // large buff pool for udp
-)
-
 /*
 ReadMethods returns methods
 Method selection
@@ -86,8 +75,8 @@ Method selection
 */
 func ReadMethods(r io.Reader) ([]uint8, error) {
 	//b := make([]byte, 257)
-	b := sPool.Get().([]byte)
-	defer sPool.Put(b)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
 
 	n, err := io.ReadAtLeast(r, b, 2)
 	if err != nil {
@@ -275,8 +264,8 @@ func NewRequest(cmd uint8, addr *Addr) *Request {
 // ReadRequest reads request from the stream
 func ReadRequest(r io.Reader) (*Request, error) {
 	// b := make([]byte, 262)
-	b := sPool.Get().([]byte)
-	defer sPool.Put(b)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
 
 	n, err := io.ReadAtLeast(r, b, 5)
 	if err != nil {
@@ -320,8 +309,8 @@ func ReadRequest(r io.Reader) (*Request, error) {
 
 func (r *Request) Write(w io.Writer) (err error) {
 	//b := make([]byte, 262)
-	b := sPool.Get().([]byte)
-	defer sPool.Put(b)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
 
 	b[0] = Version
 	b[1] = r.Cmd
@@ -372,8 +361,8 @@ func NewReply(rep uint8, addr *Addr) *Reply {
 // ReadReply reads a reply from the stream
 func ReadReply(r io.Reader) (*Reply, error) {
 	// b := make([]byte, 262)
-	b := sPool.Get().([]byte)
-	defer sPool.Put(b)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
 
 	n, err := io.ReadAtLeast(r, b, 5)
 	if err != nil {
@@ -418,8 +407,8 @@ func ReadReply(r io.Reader) (*Reply, error) {
 
 func (r *Reply) Write(w io.Writer) (err error) {
 	// b := make([]byte, 262)
-	b := sPool.Get().([]byte)
-	defer sPool.Put(b)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
 
 	b[0] = Version
 	b[1] = r.Rep
@@ -444,4 +433,143 @@ func (r *Reply) String() string {
 	}
 	return fmt.Sprintf("5 %d 0 %d %s",
 		r.Rep, addr.Type, addr.String())
+}
+
+/*
+UDPHeader is the header of an UDP request
+ +----+------+------+----------+----------+----------+
+ |RSV | FRAG | ATYP | DST.ADDR | DST.PORT |   DATA   |
+ +----+------+------+----------+----------+----------+
+ | 2  |  1   |  1   | Variable |    2     | Variable |
+ +----+------+------+----------+----------+----------+
+*/
+type UDPHeader struct {
+	Rsv  uint16
+	Frag uint8
+	Addr *Addr
+}
+
+// NewUDPHeader creates an UDPHeader
+func NewUDPHeader(rsv uint16, frag uint8, addr *Addr) *UDPHeader {
+	return &UDPHeader{
+		Rsv:  rsv,
+		Frag: frag,
+		Addr: addr,
+	}
+}
+
+func (h *UDPHeader) Write(w io.Writer) error {
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
+
+	binary.BigEndian.PutUint16(b[:2], h.Rsv)
+	b[2] = h.Frag
+
+	addr := h.Addr
+	if addr == nil {
+		addr = &Addr{}
+	}
+	length, _ := addr.Encode(b[3:])
+
+	_, err := w.Write(b[:3+length])
+	return err
+}
+
+func (h *UDPHeader) String() string {
+	return fmt.Sprintf("%d %d %d %s",
+		h.Rsv, h.Frag, h.Addr.Type, h.Addr.String())
+}
+
+// UDPDatagram represent an UDP request
+type UDPDatagram struct {
+	Header *UDPHeader
+	Data   []byte
+}
+
+// NewUDPDatagram creates an UDPDatagram
+func NewUDPDatagram(header *UDPHeader, data []byte) *UDPDatagram {
+	return &UDPDatagram{
+		Header: header,
+		Data:   data,
+	}
+}
+
+// ReadUDPDatagram reads an UDPDatagram from the stream
+func ReadUDPDatagram(r io.Reader) (*UDPDatagram, error) {
+	b := utils.LPool.Get().([]byte)
+	defer utils.LPool.Put(b)
+
+	// when r is a streaming (such as TCP connection), we may read more than the required data,
+	// but we don't know how to handle it. So we use io.ReadFull to instead of io.ReadAtLeast
+	// to make sure that no redundant data will be discarded.
+	n, err := io.ReadFull(r, b[:5])
+	if err != nil {
+		return nil, err
+	}
+
+	header := &UDPHeader{
+		Rsv:  binary.BigEndian.Uint16(b[:2]),
+		Frag: b[2],
+	}
+
+	atype := b[3]
+	hlen := 0
+	switch atype {
+	case AddrIPv4:
+		hlen = 10
+	case AddrIPv6:
+		hlen = 22
+	case AddrDomain:
+		hlen = 7 + int(b[4])
+	default:
+		return nil, ErrBadAddrType
+	}
+
+	dlen := int(header.Rsv)
+	if dlen == 0 { // standard SOCKS5 UDP datagram
+		extra, err := ioutil.ReadAll(r) // we assume no redundant data
+		if err != nil {
+			return nil, err
+		}
+		copy(b[n:], extra)
+		n += len(extra) // total length
+		dlen = n - hlen // data length
+	} else { // extended feature, for UDP over TCP, using reserved field as data length
+		if _, err := io.ReadFull(r, b[n:hlen+dlen]); err != nil {
+			return nil, err
+		}
+		n = hlen + dlen
+	}
+
+	header.Addr = new(Addr)
+	if err := header.Addr.Decode(b[3:hlen]); err != nil {
+		return nil, err
+	}
+
+	data := make([]byte, dlen)
+	copy(data, b[hlen:n])
+
+	d := &UDPDatagram{
+		Header: header,
+		Data:   data,
+	}
+
+	return d, nil
+}
+
+func (d *UDPDatagram) Write(w io.Writer) error {
+	h := d.Header
+	if h == nil {
+		h = &UDPHeader{}
+	}
+	buf := bytes.Buffer{}
+	if err := h.Write(&buf); err != nil {
+		return err
+	}
+	if _, err := buf.Write(d.Data); err != nil {
+		return err
+	}
+
+	_, err := buf.WriteTo(w)
+	return err
 }

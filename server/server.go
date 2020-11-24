@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/tls"
 	"errors"
+	"log"
 	"net"
 )
 
@@ -43,6 +44,7 @@ func (s *Server) Serve() error {
 	if err != nil {
 		return err
 	}
+	log.Printf("Server starts to listen %s", listener.Addr().String())
 
 	for {
 		conn, err := listener.Accept()
