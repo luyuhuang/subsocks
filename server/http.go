@@ -51,6 +51,7 @@ func (h *httpStripper) Read(b []byte) (n int, err error) {
 		}
 		if req.URL.Path != h.server.Config.HTTPPath {
 			req.Body.Close()
+			http404Response().Write(h.Conn)
 		} else {
 			break
 		}
@@ -78,4 +79,14 @@ func (h *httpStripper) Write(b []byte) (n int, err error) {
 		return 0, err
 	}
 	return len(b), nil
+}
+
+func http404Response() *http.Response {
+	body := bytes.NewBufferString("<h1>404</h1><p>Not Found<p>")
+	return &http.Response{
+		StatusCode:    http.StatusNotFound,
+		Proto:         "HTTP/1.1",
+		ContentLength: int64(body.Len()),
+		Body:          ioutil.NopCloser(body),
+	}
 }

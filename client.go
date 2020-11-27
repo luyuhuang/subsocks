@@ -23,6 +23,9 @@ func launchClient(t *toml.Tree) {
 		HTTP struct {
 			Path string `toml:"path"`
 		} `toml:"http"`
+		WS struct {
+			Path string `toml:"path"`
+		} `toml:"ws"`
 		TLS struct {
 			SkipVerify bool   `toml:"skip_verify"`
 			CA         string `toml:"ca"`
@@ -37,6 +40,7 @@ func launchClient(t *toml.Tree) {
 	cli.Config.ServerProtocol = config.Server.Protocol
 	cli.Config.ServerAddr = config.Server.Addr
 	cli.Config.HTTPPath = config.HTTP.Path
+	cli.Config.WSPath = config.WS.Path
 
 	if needsTLS[config.Server.Protocol] {
 		tlsConfig, err := getClientTLSConfig(config.Server.Addr, config.TLS.CA, config.TLS.SkipVerify)

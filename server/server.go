@@ -27,6 +27,8 @@ var protocol2handler = map[string]func(*Server, net.Conn){
 	"https": (*Server).httpsHandler,
 	"http":  (*Server).httpHandler,
 	"socks": (*Server).socksHandler,
+	"ws":    (*Server).wsHandler,
+	"wss":   (*Server).wssHandler,
 }
 
 // Serve start the server
@@ -61,4 +63,5 @@ type Config struct {
 	Protocol string
 	Addr     string
 	HTTPPath string
+	WSPath   string
 }

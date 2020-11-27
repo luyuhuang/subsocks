@@ -51,6 +51,8 @@ var protocol2wrapper = map[string]func(*Client, net.Conn) net.Conn{
 	"https": (*Client).wrapHTTPS,
 	"http":  (*Client).wrapHTTP,
 	"socks": (*Client).wrapSocks,
+	"ws":    (*Client).wrapWS,
+	"wss":   (*Client).wrapWSS,
 }
 
 func (c *Client) dialServer() (net.Conn, error) {
@@ -90,4 +92,5 @@ type Config struct {
 	ServerProtocol string
 	ServerAddr     string
 	HTTPPath       string
+	WSPath         string
 }
