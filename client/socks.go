@@ -56,49 +56,57 @@ func (c *Client) handler(conn net.Conn) {
 }
 
 func (c *Client) handleConnect(conn net.Conn, req *socks.Request) {
+	log.Printf("[connect] dial server to connect %s for %s", req.Addr, conn.RemoteAddr())
 	ser, err := c.dialServer()
 	if err != nil {
-		log.Printf("Dial server failed: %s", err)
+		log.Printf("[connect] dial server failed: %s", err)
 		if err := socks.NewReply(socks.HostUnreachable, nil); err != nil {
-			log.Printf("Write reply failed: %s", err)
+			log.Printf("[connect] write reply failed: %s", err)
 		}
 		return
 	}
 	defer ser.Close()
 	if err := req.Write(ser); err != nil {
-		log.Printf("Send request failed: %s", err)
+		log.Printf("[connect] send request failed: %s", err)
 		return
 	}
+	log.Printf("[connect] tunnel established %s <-> %s", conn.RemoteAddr(), req.Addr)
 	if err := utils.Transport(conn, ser); err != nil {
 		log.Printf("Transport failed: %s", err)
 	}
+	log.Printf("[connect] tunnel disconnected %s >-< %s", conn.RemoteAddr(), req.Addr)
 }
 
 func (c *Client) handleBind(conn net.Conn, req *socks.Request) {
+	log.Printf("[bind] dial server to bind %s for %s", req.Addr, conn.RemoteAddr())
+
 	ser, err := c.dialServer()
 	if err != nil {
-		log.Printf("Dial server failed: %s", err)
+		log.Printf("[bind] dial server failed: %s", err)
 		if err := socks.NewReply(socks.HostUnreachable, nil); err != nil {
-			log.Printf("Write reply failed: %s", err)
+			log.Printf("[bind] write reply failed: %s", err)
 		}
 		return
 	}
 	defer ser.Close()
 	if err := req.Write(ser); err != nil {
-		log.Printf("Send request failed: %s", err)
+		log.Printf("[bind] send request failed: %s", err)
 		return
 	}
+	log.Printf("[bind] tunnel established %s <-> ?%s", conn.RemoteAddr(), req.Addr)
 	if err := utils.Transport(conn, ser); err != nil {
 		log.Printf("Transport failed: %s", err)
 	}
+	log.Printf("[bind] tunnel disconnected %s >-< ?%s", conn.RemoteAddr(), req.Addr)
 }
 
 func (c *Client) handleUDP(conn net.Conn, req *socks.Request) {
+	log.Printf("[udp] associate UDP for %s", conn.RemoteAddr())
 	udp, err := net.ListenUDP("udp", nil)
 	if err != nil {
-		log.Printf("UDP associate failed on listen: %s", err)
+		log.Printf("[udp] UDP associate failed on listen: %s", err)
 		if err := socks.NewReply(socks.Failure, nil).Write(conn); err != nil {
-			log.Printf("Write reply failed %s", err)
+			log.Printf("[udp] write reply failed %s", err)
 		}
 		return
 	}
@@ -106,9 +114,9 @@ func (c *Client) handleUDP(conn net.Conn, req *socks.Request) {
 
 	ser, err := c.requestServer4UDP()
 	if err != nil {
-		log.Printf("UDP associate failed on request the server: %s", err)
+		log.Printf("[udp] UDP associate failed on request the server: %s", err)
 		if err := socks.NewReply(socks.Failure, nil).Write(conn); err != nil {
-			log.Printf("Write reply failed %s", err)
+			log.Printf("[udp] Write reply failed %s", err)
 		}
 		return
 	}
@@ -117,14 +125,16 @@ func (c *Client) handleUDP(conn net.Conn, req *socks.Request) {
 	addr, _ := socks.NewAddr(udp.LocalAddr().String())
 	addr.Host, _, _ = net.SplitHostPort(conn.LocalAddr().String())
 	if err := socks.NewReply(socks.Succeeded, addr).Write(conn); err != nil {
-		log.Printf("Write reply failed %s", err)
+		log.Printf("[udp] write reply failed %s", err)
 		return
 	}
 
+	log.Printf("[udp] tunnel established (UDP)%s <-> %s", udp.LocalAddr(), c.Config.ServerAddr)
 	go tunnelUDP(udp, ser)
 	if err := waiting4EOF(conn); err != nil {
 		log.Printf("Waiting for EOF failed: %s", err)
 	}
+	log.Printf("[udp] tunnel disconnected (UDP)%s >-< %s", udp.LocalAddr(), c.Config.ServerAddr)
 }
 
 func (c *Client) requestServer4UDP() (net.Conn, error) {
