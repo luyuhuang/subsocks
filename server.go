@@ -20,10 +20,11 @@ func launchServer(t *toml.Tree) {
 		Protocol string `toml:"protocol"`
 		Addr     string `toml:"listen"`
 		HTTP     struct {
-			Path string `toml:"path"`
+			Path string `toml:"path" default:"/"`
 		} `toml:"http"`
 		WS struct {
-			Path string `toml:"path"`
+			Path     string `toml:"path" default:"/"`
+			Compress bool   `toml:"compress"`
 		} `toml:"ws"`
 		TLS struct {
 			Cert string `toml:"cert"`
@@ -38,6 +39,7 @@ func launchServer(t *toml.Tree) {
 	ser := server.NewServer(config.Protocol, config.Addr)
 	ser.Config.HTTPPath = config.HTTP.Path
 	ser.Config.WSPath = config.WS.Path
+	ser.Config.WSCompress = config.WS.Compress
 
 	if needsTLS[config.Protocol] {
 		tlsConfig, err := getServerTLSConfig(config.TLS.Cert, config.TLS.Key)

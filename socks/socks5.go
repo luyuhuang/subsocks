@@ -146,6 +146,12 @@ func NewAddr(sa string) (addr *Addr, err error) {
 		return nil, err
 	}
 
+	addr = NewAddrFromPair(host, port)
+	return
+}
+
+// NewAddrFromPair creates an address object from host and port pair
+func NewAddrFromPair(host string, port int) (addr *Addr) {
 	addr = &Addr{
 		Type: AddrDomain,
 		Host: host,
@@ -160,6 +166,25 @@ func NewAddr(sa string) (addr *Addr, err error) {
 		}
 	}
 
+	return
+}
+
+// NewAddrFromAddr creates an address object
+func NewAddrFromAddr(ln, conn net.Addr) (addr *Addr, err error) {
+	_, sport, err := net.SplitHostPort(ln.String())
+	if err != nil {
+		return nil, err
+	}
+	host, _, err := net.SplitHostPort(conn.String())
+	if err != nil {
+		return nil, err
+	}
+	port, err := strconv.Atoi(sport)
+	if err != nil {
+		return nil, err
+	}
+
+	addr = NewAddrFromPair(host, port)
 	return
 }
 

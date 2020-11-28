@@ -21,10 +21,10 @@ func launchClient(t *toml.Tree) {
 			Addr     string `toml:"address"`
 		} `toml:"server"`
 		HTTP struct {
-			Path string `toml:"path"`
+			Path string `toml:"path" default:"/"`
 		} `toml:"http"`
 		WS struct {
-			Path string `toml:"path"`
+			Path string `toml:"path" default:"/"`
 		} `toml:"ws"`
 		TLS struct {
 			SkipVerify bool   `toml:"skip_verify"`

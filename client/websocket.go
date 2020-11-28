@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"crypto/tls"
+	"log"
 	"net"
 	"net/url"
 
@@ -72,11 +73,15 @@ func (w *wsWrapper) Write(b []byte) (n int, err error) {
 }
 
 func (w *wsWrapper) handshake() (conn *websocket.Conn, err error) {
+	log.Printf("[websocket] upgrade to websocket at %s", w.client.Config.WSPath)
 	u := url.URL{
 		Scheme: "ws",
 		Host:   w.client.Config.ServerAddr,
 		Path:   w.client.Config.WSPath,
 	}
-	conn, _, err = websocket.NewClient(w.Conn, &u, nil, 1024, 1024)
+	conn, res, err := websocket.NewClient(w.Conn, &u, nil, 0, 0)
+	if err == nil {
+		log.Printf("[websocket] connection established: %s", res.Status)
+	}
 	return
 }

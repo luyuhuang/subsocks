@@ -46,7 +46,7 @@ func (s *Server) Serve() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Server starts to listen %s", listener.Addr().String())
+	log.Printf("Server starts to listen %s://%s", s.Config.Protocol, listener.Addr().String())
 
 	for {
 		conn, err := listener.Accept()
@@ -60,8 +60,9 @@ func (s *Server) Serve() error {
 
 // Config is the server configuration
 type Config struct {
-	Protocol string
-	Addr     string
-	HTTPPath string
-	WSPath   string
+	Protocol   string
+	Addr       string
+	HTTPPath   string
+	WSPath     string
+	WSCompress bool
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -36,8 +37,10 @@ func newWSStripper(server *Server, conn net.Conn) *wsStripper {
 		buf:    bytes.NewBuffer(make([]byte, 0, 1024)),
 		ioBuf:  bufio.NewReader(conn),
 
-		wsConn:   nil,
-		upgrader: &websocket.Upgrader{},
+		wsConn: nil,
+		upgrader: &websocket.Upgrader{
+			EnableCompression: server.Config.WSCompress,
+		},
 	}
 }
 
@@ -96,8 +99,13 @@ func (w *wsStripper) handshake() (conn *websocket.Conn, err error) {
 	}
 	defer req.Body.Close()
 
+	log.Printf("[websocket] upgrade request received: %s %s", req.Method, req.URL.Path)
+
 	res := newHTTPRes4WS(w.Conn, bufio.NewReadWriter(w.ioBuf, bufio.NewWriter(w.Conn)))
 	conn, err = w.upgrader.Upgrade(res, req, nil)
+	if err == nil {
+		log.Printf("[websocket] connection established")
+	}
 	return
 }
 

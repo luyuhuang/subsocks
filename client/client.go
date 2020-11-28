@@ -35,7 +35,7 @@ func (c *Client) Serve() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Client starts to listen %s", listener.Addr().String())
+	log.Printf("Client starts to listen socks5://%s", listener.Addr().String())
 
 	for {
 		conn, err := listener.Accept()

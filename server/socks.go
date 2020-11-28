@@ -14,7 +14,7 @@ func (s *Server) socksHandler(conn net.Conn) {
 	// select method
 	methods, err := socks.ReadMethods(conn)
 	if err != nil {
-		log.Printf("Read methods failed: %s", err)
+		log.Printf(`[socks5] read methods failed: %s`, err)
 		return
 	}
 	method := socks.MethodNoAcceptable
@@ -25,9 +25,9 @@ func (s *Server) socksHandler(conn net.Conn) {
 	}
 	if err := socks.WriteMethod(method, conn); err != nil || method == socks.MethodNoAcceptable {
 		if err != nil {
-			log.Printf("Write method failed: %s", err)
+			log.Printf(`[socks5] write method failed: %s`, err)
 		} else {
-			log.Printf("Methods is not acceptable")
+			log.Printf(`[socks5] methods is not acceptable`)
 		}
 		return
 	}
@@ -35,7 +35,7 @@ func (s *Server) socksHandler(conn net.Conn) {
 	// read command
 	request, err := socks.ReadRequest(conn)
 	if err != nil {
-		log.Printf("Read command failed: %s", err)
+		log.Printf(`[socks5] read command failed: %s`, err)
 		return
 	}
 	switch request.Cmd {
@@ -45,9 +45,9 @@ func (s *Server) socksHandler(conn net.Conn) {
 		s.handleBind(conn, request)
 	case socks.CmdUDP:
 		// unsupported, since the server based on TCP. using CmdUDPOverTCP instad.
-		log.Printf("Unsupported command CmdUDP")
+		log.Printf(`[socks5] unsupported command CmdUDP`)
 		if err := socks.NewReply(socks.CmdUnsupported, nil).Write(conn); err != nil {
-			log.Printf("Write reply failed: %s", err)
+			log.Printf(`[socks5] write reply failed: %s`, err)
 		}
 		return
 	case socks.CmdUDPOverTCP:
@@ -56,55 +56,54 @@ func (s *Server) socksHandler(conn net.Conn) {
 }
 
 func (s *Server) handleConnect(conn net.Conn, req *socks.Request) {
-	log.Printf("[connect] connect %s for %s", req.Addr, conn.RemoteAddr())
+	log.Printf(`[socks5] "connect" connect %s for %s`, req.Addr, conn.RemoteAddr())
 	newConn, err := net.Dial("tcp", req.Addr.String())
 	if err != nil {
-		log.Printf("[connect] dial remote failed: %s", err)
+		log.Printf(`[socks5] "connect" dial remote failed: %s`, err)
 		if err := socks.NewReply(socks.HostUnreachable, nil).Write(conn); err != nil {
-			log.Printf("[connect] write reply failed: %s", err)
+			log.Printf(`[socks5] "connect" write reply failed: %s`, err)
 		}
 		return
 	}
 	defer newConn.Close()
 
 	if err := socks.NewReply(socks.Succeeded, nil).Write(conn); err != nil {
-		log.Printf("[connect] write reply failed: %s", err)
+		log.Printf(`[socks5] "connect" write reply failed: %s`, err)
 		return
 	}
 
-	log.Printf("[connect] tunnel established %s <-> %s", conn.RemoteAddr(), req.Addr)
+	log.Printf(`[socks5] "connect" tunnel established %s <-> %s`, conn.RemoteAddr(), req.Addr)
 	if err := utils.Transport(conn, newConn); err != nil {
-		log.Printf("[connect] transport failed: %s", err)
+		log.Printf(`[socks5] "connect" transport failed: %s`, err)
 	}
-	log.Printf("[connect] tunnel disconnected %s >-< %s", conn.RemoteAddr(), req.Addr)
+	log.Printf(`[socks5] "connect" tunnel disconnected %s >-< %s`, conn.RemoteAddr(), req.Addr)
 }
 
 func (s *Server) handleBind(conn net.Conn, req *socks.Request) {
-	log.Printf("[bind] bind for %s", conn.RemoteAddr())
+	log.Printf(`[socks5] "bind" bind for %s`, conn.RemoteAddr())
 	listener, err := net.ListenTCP("tcp", nil)
 	if err != nil {
-		log.Printf("[bind] bind failed on listen: %s", err)
+		log.Printf(`[socks5] "bind" bind failed on listen: %s`, err)
 		if err := socks.NewReply(socks.Failure, nil).Write(conn); err != nil {
-			log.Printf("[bind] write reply failed %s", err)
+			log.Printf(`[socks5] "bind" write reply failed %s`, err)
 		}
 		return
 	}
 
 	// first response: send listen address
-	addr, _ := socks.NewAddr(listener.Addr().String())
-	addr.Host, _, _ = net.SplitHostPort(conn.LocalAddr().String())
+	addr, _ := socks.NewAddrFromAddr(listener.Addr(), conn.LocalAddr())
 	if err := socks.NewReply(socks.Succeeded, addr).Write(conn); err != nil {
 		listener.Close()
-		log.Printf("[bind] write reply failed %s", err)
+		log.Printf(`[socks5] "bind" write reply failed %s`, err)
 		return
 	}
 
 	newConn, err := listener.AcceptTCP()
 	listener.Close()
 	if err != nil {
-		log.Printf("[bind] bind failed on accept: %s", err)
+		log.Printf(`[socks5] "bind" bind failed on accept: %s`, err)
 		if err := socks.NewReply(socks.Failure, nil).Write(conn); err != nil {
-			log.Printf("[bind] write reply failed %s", err)
+			log.Printf(`[socks5] "bind" write reply failed %s`, err)
 		}
 		return
 	}
@@ -113,41 +112,40 @@ func (s *Server) handleBind(conn net.Conn, req *socks.Request) {
 	// second response: accepted address
 	raddr, _ := socks.NewAddr(newConn.RemoteAddr().String())
 	if err := socks.NewReply(socks.Succeeded, raddr).Write(conn); err != nil {
-		log.Printf("[bind] write reply failed %s", err)
+		log.Printf(`[socks5] "bind" write reply failed %s`, err)
 		return
 	}
 
-	log.Printf("[bind] tunnel established %s <-> %s", conn.RemoteAddr(), newConn.RemoteAddr())
+	log.Printf(`[socks5] "bind" tunnel established %s <-> %s`, conn.RemoteAddr(), newConn.RemoteAddr())
 	if err := utils.Transport(conn, newConn); err != nil {
-		log.Printf("[bind] transport failed: %s", err)
+		log.Printf(`[socks5] "bind" transport failed: %s`, err)
 	}
-	log.Printf("[bind] tunnel disconnected %s >-< %s", conn.RemoteAddr(), newConn.RemoteAddr())
+	log.Printf(`[socks5] "bind" tunnel disconnected %s >-< %s`, conn.RemoteAddr(), newConn.RemoteAddr())
 }
 
 func (s *Server) handleUDPOverTCP(conn net.Conn, req *socks.Request) {
-	log.Printf("[udp-over-tcp] associate UDP for %s", conn.RemoteAddr())
+	log.Printf(`[socks5] "udp-over-tcp" associate UDP for %s`, conn.RemoteAddr())
 	udp, err := net.ListenUDP("udp", nil)
 	if err != nil {
-		log.Printf("[udp-over-tcp] UDP associate failed on listen: %s", err)
+		log.Printf(`[socks5] "udp-over-tcp" UDP associate failed on listen: %s`, err)
 		if err := socks.NewReply(socks.Failure, nil).Write(conn); err != nil {
-			log.Printf("[udp-over-tcp] write reply failed %s", err)
+			log.Printf(`[socks5] "udp-over-tcp" write reply failed %s`, err)
 		}
 		return
 	}
 	defer udp.Close()
 
-	addr, _ := socks.NewAddr(udp.LocalAddr().String())
-	addr.Host, _, _ = net.SplitHostPort(conn.LocalAddr().String())
+	addr, _ := socks.NewAddrFromAddr(udp.LocalAddr(), conn.LocalAddr())
 	if err := socks.NewReply(socks.Succeeded, addr).Write(conn); err != nil {
-		log.Printf("[udp-over-tcp] write reply failed %s", err)
+		log.Printf(`[socks5] "udp-over-tcp" write reply failed %s`, err)
 		return
 	}
 
-	log.Printf("[udp-over-tcp] tunnel established %s <-> (UDP)%s", conn.RemoteAddr(), udp.LocalAddr())
+	log.Printf(`[socks5] "udp-over-tcp" tunnel established %s <-> (UDP)%s`, conn.RemoteAddr(), udp.LocalAddr())
 	if err := tunnelUDP(conn, udp); err != nil {
-		log.Printf("[udp-over-tcp] tunnel UDP failed: %s", err)
+		log.Printf(`[socks5] "udp-over-tcp" tunnel UDP failed: %s`, err)
 	}
-	log.Printf("[udp-over-tcp] tunnel disconnected %s >-< (UDP)%s", conn.RemoteAddr(), udp.LocalAddr())
+	log.Printf(`[socks5] "udp-over-tcp" tunnel disconnected %s >-< (UDP)%s`, conn.RemoteAddr(), udp.LocalAddr())
 }
 
 func tunnelUDP(conn net.Conn, udp net.PacketConn) error {
