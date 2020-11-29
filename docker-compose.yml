@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  subsocks:
+    image: luyuhuang/subsocks
+    restart: always
+    expose:
+      - '1080'
+    ports:
+      - '1080:1080'
+    volumes:
+      - ./config.toml:/subsocks/config.toml

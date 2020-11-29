@@ -2,9 +2,11 @@
 
 A Socks5 proxy that encapsulates Socks5 in other security protocols
 
+[![release](https://img.shields.io/github/release/luyuhuang/subsocks.svg)](https://github.com/luyuhuang/subsocks/releases)
+
 ## Introduction
 
-Subsocks is a Socks5 proxy. Subsocks encapsulate Socks5 in other security protocols such as HTTPS and Websocket instead of using Socks5 directly. Socks5 is fully supported (Connect, Bind, UDP associate), and extending Socks5 to make UDP over TCP possible. It helps you optimize your network or bypass firewalls that only allow some particular protocols.
+Subsocks is a secure Socks5 proxy. It encapsulate Socks5 in other security protocols such as HTTPS and Websocket instead of using Socks5 directly. Socks5 is fully supported (Connect, Bind, UDP associate), and extending Socks5 to make UDP over TCP possible. It helps you optimize your network or bypass firewalls that only allow some particular protocols.
 
 ![protocols](./protocols.svg)
 
@@ -16,13 +18,25 @@ Subsocks is a Socks5 proxy. Subsocks encapsulate Socks5 in other security protoc
 
 ## Installation
 
+### go get
+
 Subsocks is written by Go, If you have Go environment, using `go get` is one of the easiest ways.
 
 ```sh
 go get github.com/luyuhuang/subsocks
 ```
 
-Or download the binary file from the [release page](https://github.com/luyuhuang/subsocks/releases).
+### Docker
+
+```sh
+docker pull luyuhuang/subsocks
+```
+
+### Binary file
+
+Download the binary file from the [release page](https://github.com/luyuhuang/subsocks/releases).
+
+### Build from source code
 
 You can also build from source code.
 
@@ -46,10 +60,11 @@ Create the client configuration file `cli.toml` with the following content:
 [client]
 listen = "127.0.0.1:1030"
 
-server.protocol = "http"
+server.protocol = "https"
 server.address = "SERVER_IP:1080" # replace SERVER_IP with the server IP
 
 http.path = "/proxy" # same as http.path of the server
+tls.skip_verify = true # skip verify the server's certificate since the certificate is self-signed
 ```
 
 Then start the client:
@@ -63,7 +78,7 @@ Similarity, create the server configuration file `ser.toml`:
 ```toml
 [server]
 listen = "0.0.0.0:1080"
-protocol = "http"
+protocol = "https"
 
 http.path = "/proxy"
 ```
@@ -73,6 +88,35 @@ And then start the server:
 ```sh
 subsocks -c ser.toml
 ```
+
+### With Docker
+
+Download `docker-compose.yml`:
+
+```
+wget https://raw.githubusercontent.com/luyuhuang/subsocks/master/docker-compose.yml
+```
+
+Create the configuration file `config.toml`:
+
+```toml
+[server] # no one will use docker for the client, right?
+
+# must be "0.0.0.0:1080". It's just the address in the
+# container, modify the real address in docker-compose.yml
+listen = "0.0.0.0:1080"
+
+protocol = "https"
+# other fields ...
+```
+
+Launch:
+
+```sh
+docker-compose up -d
+```
+
+> I think it's much more troublesome then use the binary file directly. If you want to use a custom certificate, you must create a volume to map it to the container.
 
 ### Configuration
 
