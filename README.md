@@ -3,6 +3,7 @@
 A Socks5 proxy that encapsulates Socks5 in other security protocols
 
 [![release](https://img.shields.io/github/release/luyuhuang/subsocks.svg)](https://github.com/luyuhuang/subsocks/releases)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/luyuhuang/subsocks/Build)](https://github.com/luyuhuang/subsocks/actions)
 
 ## Introduction
 
