@@ -1,7 +1,7 @@
 package main
 
 // Version of subsocks
-const Version = "0.0.1"
+const Version = "0.0.2"
 
 var needsTLS = map[string]bool{
 	"https": true,
