@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+jobs:
+  binary:
+    name: Release binary files
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Build
+      run: |
+        bash build.sh
+
+    - name: Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -x
+        assets=()
+        for asset in targets/*; do
+          assets+=("-a" "$asset")
+        done
+        tag_name="${GITHUB_REF##*/}"
+        hub release create "${assets[@]}" -m "$tag_name" "$tag_name"
+
+  docker:
+    name: Release Docker
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Dockerhub login
+      env:
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "${DOCKER_PASSWORD}" | docker login --username luyuhuang --password-stdin
+
+    - name: Set up Docker Buildx
+      id: buildx
+      uses: crazy-max/ghaction-docker-buildx@v1
+      with:
+        buildx-version: latest
+
+    - name: Build dockerfile (with push)
+      run: |
+        docker buildx build \
+        --platform=linux/amd64,linux/arm/v7,linux/arm64 \
+        --output "type=image,push=true" \
+        --file ./Dockerfile . \
+        --tag luyuhuang/subsocks:${GITHUB_REF##*/}

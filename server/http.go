@@ -69,9 +69,13 @@ func (h *httpStripper) Read(b []byte) (n int, err error) {
 }
 
 func (h *httpStripper) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
 	res := http.Response{
 		StatusCode:    200,
-		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
 		ContentLength: int64(len(b)),
 		Body:          ioutil.NopCloser(bytes.NewBuffer(b)),
 	}
@@ -85,7 +89,8 @@ func http404Response() *http.Response {
 	body := bytes.NewBufferString("<h1>404</h1><p>Not Found<p>")
 	return &http.Response{
 		StatusCode:    http.StatusNotFound,
-		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
 		ContentLength: int64(body.Len()),
 		Body:          ioutil.NopCloser(body),
 	}

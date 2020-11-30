@@ -2,8 +2,9 @@
 
 A Socks5 proxy that encapsulates Socks5 in other security protocols
 
+[![build](https://img.shields.io/github/workflow/status/luyuhuang/subsocks/Build)](https://github.com/luyuhuang/subsocks/actions)
 [![release](https://img.shields.io/github/release/luyuhuang/subsocks.svg)](https://github.com/luyuhuang/subsocks/releases)
-[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/luyuhuang/subsocks/Build)](https://github.com/luyuhuang/subsocks/actions)
+[![docker](https://img.shields.io/docker/image-size/luyuhuang/subsocks)](https://hub.docker.com/r/luyuhuang/subsocks)
 
 ## Introduction
 
@@ -117,7 +118,7 @@ Launch:
 docker-compose up -d
 ```
 
-> I think it's much more troublesome then use the binary file directly. If you want to use a custom certificate, you must create a volume to map it to the container.
+> NOTICE: If you want to use a custom certificate, edit `docker-compose.yml` and create a volume to map it to the container.
 
 ### Configuration
 

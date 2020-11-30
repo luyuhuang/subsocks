@@ -52,6 +52,10 @@ func (w *wsStripper) Read(b []byte) (n int, err error) {
 		}
 	}
 
+	if len(b) == 0 {
+		return 0, nil
+	}
+
 	if w.buf.Len() > 0 {
 		return w.buf.Read(b)
 	}
@@ -72,6 +76,10 @@ func (w *wsStripper) Write(b []byte) (n int, err error) {
 		if err != nil {
 			return
 		}
+	}
+
+	if len(b) == 0 {
+		return 0, nil
 	}
 
 	err = w.wsConn.WriteMessage(websocket.BinaryMessage, b)
@@ -173,6 +181,7 @@ func (r *httpRes4WS) WriteHeader(statusCode int) {
 	buf.WriteString(strconv.FormatInt(int64(r.statusCode), 10))
 	buf.WriteString(" ")
 	buf.WriteString(http.StatusText(r.statusCode))
+	buf.WriteString("\r\n")
 	r.header.Write(buf)
 	buf.WriteString("\r\n")
 
