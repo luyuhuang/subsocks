@@ -3,8 +3,10 @@ package client
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 
 	"github.com/gorilla/websocket"
@@ -73,13 +75,20 @@ func (w *wsWrapper) Write(b []byte) (n int, err error) {
 }
 
 func (w *wsWrapper) handshake() (conn *websocket.Conn, err error) {
-	log.Printf("[websocket] upgrade to websocket at %s", w.client.Config.WSPath)
+	config := w.client.Config
+	log.Printf("[websocket] upgrade to websocket at %s", config.WSPath)
 	u := url.URL{
 		Scheme: "ws",
-		Host:   w.client.Config.ServerAddr,
-		Path:   w.client.Config.WSPath,
+		Host:   config.ServerAddr,
+		Path:   config.WSPath,
 	}
-	conn, res, err := websocket.NewClient(w.Conn, &u, nil, 0, 0)
+	var header http.Header
+	if config.Username != "" && config.Password != "" {
+		header = make(http.Header)
+		s := base64.StdEncoding.EncodeToString([]byte(config.Username + ":" + config.Password))
+		header.Add("Authorization", "Basic "+s)
+	}
+	conn, res, err := websocket.NewClient(w.Conn, &u, header, 0, 0)
 	if err == nil {
 		log.Printf("[websocket] connection established: %s", res.Status)
 	}

@@ -87,7 +87,9 @@ func (c *Client) dialServer() (net.Conn, error) {
 
 // Config is the client configuration
 type Config struct {
-	Addr string
+	Addr     string
+	Username string
+	Password string
 
 	ServerProtocol string
 	ServerAddr     string

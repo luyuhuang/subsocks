@@ -4,10 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"strings"
+
+	"github.com/luyuhuang/subsocks/utils"
 )
 
 func (s *Server) httpsHandler(conn net.Conn) {
@@ -49,12 +53,21 @@ func (h *httpStripper) Read(b []byte) (n int, err error) {
 		if err != nil {
 			return 0, err
 		}
-		if req.URL.Path != h.server.Config.HTTPPath {
+
+		if h.server.Config.Verify != nil {
+			if !httpBasicAuth(req.Header.Get("Authorization"), h.server.Config.Verify) {
+				req.Body.Close()
+				http401Response().Write(h.Conn)
+				continue
+			}
+		}
+		if !utils.StrEQ(req.URL.Path, h.server.Config.HTTPPath) {
 			req.Body.Close()
 			http404Response().Write(h.Conn)
-		} else {
-			break
+			continue
 		}
+
+		break
 	}
 	defer req.Body.Close()
 
@@ -94,4 +107,35 @@ func http404Response() *http.Response {
 		ContentLength: int64(body.Len()),
 		Body:          ioutil.NopCloser(body),
 	}
+}
+
+func http401Response() *http.Response {
+	body := bytes.NewBufferString("<h1>401</h1><p>Unauthorized<p>")
+	header := make(http.Header)
+	header.Add("WWW-Authenticate", `Basic realm="auth"`)
+	return &http.Response{
+		StatusCode:    http.StatusUnauthorized,
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		ContentLength: int64(body.Len()),
+		Body:          ioutil.NopCloser(body),
+		Header:        header,
+	}
+}
+
+func httpBasicAuth(auth string, verify func(string, string) bool) bool {
+	prefix := "Basic "
+	if !strings.HasPrefix(auth, prefix) {
+		return false
+	}
+	auth = strings.Trim(auth[len(prefix):], " ")
+	dc, err := base64.StdEncoding.DecodeString(auth)
+	if err != nil {
+		return false
+	}
+	groups := strings.Split(string(dc), ":")
+	if len(groups) != 2 {
+		return false
+	}
+	return verify(groups[0], groups[1])
 }

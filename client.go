@@ -15,8 +15,10 @@ import (
 
 func launchClient(t *toml.Tree) {
 	config := struct {
-		Listen string `toml:"listen" default:"127.0.0.1:1080"`
-		Server struct {
+		Listen   string `toml:"listen" default:"127.0.0.1:1080"`
+		Username string `toml:"username"`
+		Password string `toml:"password"`
+		Server   struct {
 			Protocol string `toml:"protocol"`
 			Addr     string `toml:"address"`
 		} `toml:"server"`
@@ -37,6 +39,8 @@ func launchClient(t *toml.Tree) {
 	}
 
 	cli := client.NewClient(config.Listen)
+	cli.Config.Username = config.Username
+	cli.Config.Password = config.Password
 	cli.Config.ServerProtocol = config.Server.Protocol
 	cli.Config.ServerAddr = config.Server.Addr
 	cli.Config.HTTPPath = config.HTTP.Path

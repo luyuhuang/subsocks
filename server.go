@@ -41,6 +41,17 @@ func launchServer(t *toml.Tree) {
 	ser.Config.WSPath = config.WS.Path
 	ser.Config.WSCompress = config.WS.Compress
 
+	switch users := t.Get("users").(type) {
+	case string:
+		ser.SetUsersFromHtpasswd(users)
+	case *toml.Tree:
+		m := make(map[string]string)
+		if err := users.Unmarshal(&m); err != nil {
+			log.Fatalf("Parse 'server.users' configuration failed: %s", err)
+		}
+		ser.SetUsersFromMap(m)
+	}
+
 	if needsTLS[config.Protocol] {
 		tlsConfig, err := getServerTLSConfig(config.TLS.Cert, config.TLS.Key)
 		if err != nil {

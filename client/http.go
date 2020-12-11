@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -24,14 +26,22 @@ type httpWrapper struct {
 	client *Client
 	buf    *bytes.Buffer
 	ioBuf  *bufio.Reader
+	auth   string
 }
 
 func newHTTPWrapper(conn net.Conn, client *Client) *httpWrapper {
+	var auth string
+	cfg := client.Config
+	if cfg.Username != "" && cfg.Password != "" {
+		s := base64.StdEncoding.EncodeToString([]byte(cfg.Username + ":" + cfg.Password))
+		auth = "Basic " + s
+	}
 	return &httpWrapper{
 		Conn:   conn,
 		client: client,
 		buf:    bytes.NewBuffer(make([]byte, 0, 1024)),
 		ioBuf:  bufio.NewReader(conn),
+		auth:   auth,
 	}
 }
 
@@ -49,6 +59,10 @@ func (h *httpWrapper) Read(b []byte) (n int, err error) {
 		return 0, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return 0, fmt.Errorf("Response status is not OK: %s", res.Status)
+	}
 
 	if n, err = res.Body.Read(b); err != nil && err != io.EOF {
 		return
@@ -72,6 +86,11 @@ func (h *httpWrapper) Write(b []byte) (n int, err error) {
 		Host:          h.client.Config.ServerAddr,
 		ContentLength: int64(len(b)),
 		Body:          ioutil.NopCloser(bytes.NewBuffer(b)),
+		Header:        http.Header{},
+	}
+	req.Header.Add("Connection", "keep-alive")
+	if h.auth != "" {
+		req.Header.Add("Authorization", h.auth)
 	}
 	if err := req.Write(h.Conn); err != nil {
 		return 0, err

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"crypto/subtle"
 	"io"
 	"sync"
 )
@@ -36,4 +37,9 @@ func Transport(rw1, rw2 io.ReadWriter) error {
 		return err
 	}
 	return nil
+}
+
+// StrEQ returns whether s1 and s2 are equal
+func StrEQ(s1, s2 string) bool {
+	return subtle.ConstantTimeCompare([]byte(s1), []byte(s2)) == 1
 }
