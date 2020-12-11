@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -12,13 +13,16 @@ import (
 	"github.com/luyuhuang/subsocks/utils"
 )
 
-func wsUpgrade(w io.Writer, path string) {
+func wsUpgrade(w io.Writer, path, auth string) {
 	w.Write([]byte(fmt.Sprintf("GET %s HTTP/1.1\r\n", path)))
 	w.Write([]byte("Host: 127.0.0.1\r\n"))
 	w.Write([]byte("Connection: Upgrade\r\n"))
 	w.Write([]byte("Sec-WebSocket-Key: W4zMN8zrAeC0PuhpvvXp0A==\r\n"))
 	w.Write([]byte("Sec-WebSocket-Version: 13\r\n"))
 	w.Write([]byte("Upgrade: websocket\r\n"))
+	if auth != "" {
+		w.Write([]byte(fmt.Sprintf("Authorization: Basic %s\r\n", auth)))
+	}
 	w.Write([]byte("\r\n"))
 }
 
@@ -57,7 +61,7 @@ func TestWSWrapperHandshake(t *testing.T) {
 		addr, _ := net.ResolveIPAddr("tcp", "127.0.0.1:1030")
 		conn := utils.NewFakeConn(addr, addr)
 
-		wsUpgrade(conn.In, c.reqPath)
+		wsUpgrade(conn.In, c.reqPath, "")
 
 		ser := NewServer("http", "127.0.0.1:1080")
 		ser.Config.WSPath = c.serPath
@@ -87,7 +91,7 @@ func TestWSWrapperData(t *testing.T) {
 		addr, _ := net.ResolveIPAddr("tcp", "127.0.0.1:1030")
 		conn := utils.NewFakeConn(addr, addr)
 
-		wsUpgrade(conn.In, "/ws/proxy")
+		wsUpgrade(conn.In, "/ws/proxy", "")
 
 		ser := NewServer("http", "127.0.0.1:1080")
 		ser.Config.WSPath = "/ws/proxy"
@@ -133,7 +137,7 @@ func TestWSWrapperBuf(t *testing.T) {
 	addr, _ := net.ResolveIPAddr("tcp", "127.0.0.1:1030")
 	conn := utils.NewFakeConn(addr, addr)
 
-	wsUpgrade(conn.In, "/ws/proxy")
+	wsUpgrade(conn.In, "/ws/proxy", "")
 
 	ser := NewServer("http", "127.0.0.1:1080")
 	ser.Config.WSPath = "/ws/proxy"
@@ -169,5 +173,50 @@ func TestWSWrapperBuf(t *testing.T) {
 	_, err = ws.Read(buf)
 	if e, ok := err.(*websocket.CloseError); !ok || e.Code != websocket.CloseNoStatusReceived {
 		t.Fatalf("Read error got %q, want CloseNoStatusReceived", err)
+	}
+}
+
+func TestWSAuth(t *testing.T) {
+	cases := []struct {
+		username, password string
+		err                error
+		res                string
+	}{
+		{"admin", "123456", nil, "HTTP/1.1 101 Switching Protocols"},
+		{"user", "abcde", nil, "HTTP/1.1 101 Switching Protocols"},
+		{"", "", io.EOF, "HTTP/1.1 401 Unauthorized"},
+		{"", "", io.EOF, "HTTP/1.1 401 Unauthorized"},
+		{"user", "abcdef", io.EOF, "HTTP/1.1 401 Unauthorized"},
+		{"luyu", "", io.EOF, "HTTP/1.1 401 Unauthorized"},
+		{"luyu", "123456", io.EOF, "HTTP/1.1 401 Unauthorized"},
+		{"luyu", "123456", io.EOF, "HTTP/1.1 401 Unauthorized"},
+	}
+
+	for _, c := range cases {
+		addr, _ := net.ResolveIPAddr("tcp", "127.0.0.1:1030")
+		conn := utils.NewFakeConn(addr, addr)
+
+		var auth string
+		if c.username != "" && c.password != "" {
+			auth = base64.StdEncoding.EncodeToString([]byte(c.username + ":" + c.password))
+		}
+		wsUpgrade(conn.In, "/proxy", auth)
+
+		ser := NewServer("http", "127.0.0.1:1080")
+		ser.Config.WSPath = "/proxy"
+		ser.SetUsersFromMap(map[string]string{
+			"admin": "123456",
+			"user":  "abcde",
+		})
+
+		ws := newWSStripper(ser, conn)
+		_, err := ws.Read(nil)
+		if err != c.err {
+			t.Fatalf("Handshake error got %q, want %q", err, c.err)
+		}
+
+		if !strings.Contains(string(conn.Out.Bytes()), c.res) {
+			t.Fatalf("Response %q dose not contains %q", string(conn.Out.Bytes()), c.res)
+		}
 	}
 }

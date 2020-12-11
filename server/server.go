@@ -28,7 +28,7 @@ func NewServer(protocol, addr string) *Server {
 
 // SetUsersFromMap sets users from a user-password map
 func (s *Server) SetUsersFromMap(users map[string]string) {
-	s.Config.Verify = func(username string, password string) bool {
+	s.Config.Verify = func(username, password string) bool {
 		pw, ok := users[username]
 		if !ok {
 			return false
@@ -43,7 +43,7 @@ func (s *Server) SetUsersFromHtpasswd(users string) {
 	if err != nil {
 		log.Fatalf("Load htpasswd file failed: %s", err)
 	}
-	s.Config.Verify = func(username string, password string) bool {
+	s.Config.Verify = func(username, password string) bool {
 		return f.Match(username, password)
 	}
 }

@@ -15,7 +15,7 @@ Subsocks is a secure Socks5 proxy. It encapsulate Socks5 in other security proto
 - [x] Fully support Socks5 (Connect, Bind, UDP associate)
 - [x] HTTP / HTTPS
 - [x] Websocket
-- [ ] HTTP authorization
+- [x] HTTP authorization
 - [ ] Smart proxy
 
 ## Installation
@@ -131,6 +131,10 @@ The client configuration format is as follows:
 
 listen = "ADDRESS:PORT" # the client socks5 listening address
 
+# username and password, if the server enabled authorization.
+username = "USERNAME"
+password = "PASSWORD"
+
 # protocol of the server.
 # - socks: pure socks5
 # - http, https: HTTP and HTTPS
@@ -169,4 +173,14 @@ ws.compress = true|false # whether to compress. default false
 tls.cert = "CERT" # certificate file path.
 tls.key = "KEY" # key file path.
 # if tls.cert or tls.key is not set, key and certificate will be automatically generated
+
+# if there is a users field, enable authorization.
+
+# method 1, using htpasswd file
+users = "HTPASSWD" # the htpasswd file path
+
+# method 2, configuring username-password pairs
+[server.users]
+"USERNAME-1" = "PASSWORD-1"
+"USERNAME-2" = "PASSWORD-2"
 ```
