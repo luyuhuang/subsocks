@@ -11,7 +11,7 @@ import (
 func main() {
 	var configPath string
 	var showVersion bool
-	flag.StringVar(&configPath, "c", "", "configuration file")
+	flag.StringVar(&configPath, "c", "", "configuration file, default to 'config.yml'")
 	flag.BoolVar(&showVersion, "v", false, "show version information")
 	flag.Parse()
 

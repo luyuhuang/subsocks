@@ -14,6 +14,7 @@ import (
 type Client struct {
 	Config    *Config
 	TLSConfig *tls.Config
+	Rules     *Rules
 }
 
 // NewClient creates a client

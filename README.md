@@ -138,7 +138,7 @@ password = "PASSWORD"
 # protocol of the server.
 # - socks: pure socks5
 # - http, https: HTTP and HTTPS
-# - ws, wss: Websocket and Websocket over TLS
+# - ws, wss: Websocket and Websocket Secure
 server.protocol = "socks|http|https|ws|wss"
 
 server.address = "ADDRESS:PORT"  # address of the server

@@ -46,6 +46,25 @@ func launchClient(t *toml.Tree) {
 	cli.Config.HTTPPath = config.HTTP.Path
 	cli.Config.WSPath = config.WS.Path
 
+	switch rules := t.Get("rules").(type) {
+	case string:
+		r, err := client.NewRulesFromFile(rules)
+		if err != nil {
+			log.Fatalf("Load rule file failed: %s", err)
+		}
+		cli.Rules = r
+	case *toml.Tree:
+		m := make(map[string]string)
+		if err := rules.Unmarshal(&m); err != nil {
+			log.Fatalf("Parse 'client.rules' configuration failed: %s", err)
+		}
+		r, err := client.NewRulesFromMap(m)
+		if err != nil {
+			log.Fatalf("Load rules file failed: %s", err)
+		}
+		cli.Rules = r
+	}
+
 	if needsTLS[config.Server.Protocol] {
 		tlsConfig, err := getClientTLSConfig(config.Server.Addr, config.TLS.CA, config.TLS.SkipVerify)
 		if err != nil {
