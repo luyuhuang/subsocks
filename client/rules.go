@@ -75,6 +75,7 @@ func NewRulesFromMap(rules map[string]string) (*Rules, error) {
 // NewRulesFromFile creates a Rules object from a rule file
 func NewRulesFromFile(path string) (*Rules, error) {
 	f, err := os.Open(path)
+	defer f.Close()
 	if err != nil {
 		return nil, err
 	}
