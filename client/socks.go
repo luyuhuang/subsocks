@@ -60,8 +60,7 @@ func (c *Client) handleConnect(conn net.Conn, req *socks.Request) {
 	var err error
 	var isProxy bool
 
-	rule := c.Rules.getRule(req.Addr.Host)
-	if rule == ruleProxy {
+	if rule := c.Rules.getRule(req.Addr.Host); rule == ruleProxy {
 		log.Printf(`[socks5] "connect" dial server to connect %s for %s`, req.Addr, conn.RemoteAddr())
 
 		isProxy = true
@@ -82,7 +81,6 @@ func (c *Client) handleConnect(conn net.Conn, req *socks.Request) {
 		if err != nil {
 			if rule == ruleAuto {
 				log.Printf(`[socks5] "connect" dial %s failed, dial server for %s`, req.Addr, conn.RemoteAddr())
-				c.Rules.setAsProxy(req.Addr.Host)
 
 				isProxy = true
 				nextHop, err = c.dialServer()
@@ -93,6 +91,7 @@ func (c *Client) handleConnect(conn net.Conn, req *socks.Request) {
 					}
 					return
 				}
+				c.Rules.setAsProxy(req.Addr.Host)
 			} else {
 				log.Printf(`[socks5] "connect" dial remote failed: %s`, err)
 				if err = socks.NewReply(socks.HostUnreachable, nil).Write(conn); err != nil {
@@ -104,23 +103,26 @@ func (c *Client) handleConnect(conn net.Conn, req *socks.Request) {
 		defer nextHop.Close()
 	}
 
+	var dash rune
 	if isProxy {
 		if err = req.Write(nextHop); err != nil {
 			log.Printf(`[socks5] "connect" send request failed: %s`, err)
 			return
 		}
+		dash = '-'
 	} else {
 		if err = socks.NewReply(socks.Succeeded, nil).Write(conn); err != nil {
 			log.Printf(`[socks5] "connect" write reply failed: %s`, err)
 			return
 		}
+		dash = '='
 	}
 
-	log.Printf(`[socks5] "connect" tunnel established %s <-> %s`, conn.RemoteAddr(), req.Addr)
+	log.Printf(`[socks5] "connect" tunnel established %s <%c> %s`, conn.RemoteAddr(), dash, req.Addr)
 	if err := utils.Transport(conn, nextHop); err != nil {
 		log.Printf(`[socks5] "connect" transport failed: %s`, err)
 	}
-	log.Printf(`[socks5] "connect" tunnel disconnected %s >-< %s`, conn.RemoteAddr(), req.Addr)
+	log.Printf(`[socks5] "connect" tunnel disconnected %s >%c< %s`, conn.RemoteAddr(), dash, req.Addr)
 }
 
 func (c *Client) handleBind(conn net.Conn, req *socks.Request) {

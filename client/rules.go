@@ -74,8 +74,43 @@ func NewRulesFromMap(rules map[string]string) (*Rules, error) {
 
 // NewRulesFromFile creates a Rules object from a rule file
 func NewRulesFromFile(path string) (*Rules, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	r := &Rules{
+		domainTree: newDomainNode(),
+		ipMap:      make(map[string]int),
+		isProxy:    make(map[string]bool),
+		other:      ruleAuto,
+	}
+	r.loadCache()
+
+	ln := 1
+	for s := bufio.NewScanner(f); s.Scan(); ln++ {
+		line := strings.TrimSpace(s.Text())
+		if line == "" || line[0] == '#' {
+			continue
+		}
+
+		i := strings.IndexAny(line, " \t")
+		if i < 0 {
+			return nil, fmt.Errorf("Illegal rule in line %d", ln)
+		}
+
+		addr := line[:i]
+		rules := strings.TrimSpace(line[i+1:])
+		rule, ok := ruleString2Rule[rules]
+		if !ok {
+			return nil, fmt.Errorf("Rule in line %d got %s, want proxy|direct|auto|P|D|A", ln, rules)
+		}
+
+		if err := r.setRule(addr, rule); err != nil {
+			return nil, fmt.Errorf("Set rule failed: %s", err)
+		}
+	}
+	return r, nil
 }
 
 func (r *Rules) loadCache() error {
@@ -166,9 +201,8 @@ func (r *Rules) getRule(addr string) (rule int) {
 				break
 			}
 
-			if p.wild || i == 0 {
+			if p.rule != ruleNone && (p.wild || i == 0) {
 				rule = p.rule
-				break
 			}
 		}
 	}
