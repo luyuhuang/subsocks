@@ -16,7 +16,7 @@ Subsocks is a secure Socks5 proxy. It encapsulate Socks5 in other security proto
 - [x] HTTP / HTTPS
 - [x] Websocket
 - [x] HTTP authorization
-- [ ] Smart proxy
+- [x] Smart proxy
 
 ## Installation
 
@@ -120,67 +120,148 @@ docker-compose up -d
 
 > NOTICE: If you want to use a custom certificate, edit `docker-compose.yml` and create a volume to map it to the container.
 
-### Configuration
+## Configuration
 
 Subsocks configuration format is [TOML](https://github.com/toml-lang/toml), which is easy and obvious.
+
+### Client configuration
 
 The client configuration format is as follows:
 
 ```toml
 [client] # client configuration
 
-listen = "ADDRESS:PORT" # the client socks5 listening address
+listen = "127.0.0.1:10030"
 
-# username and password, if the server enabled authorization.
-username = "USERNAME"
-password = "PASSWORD"
+username = "admin"
+password = "123456"
 
-# protocol of the server.
-# - socks: pure socks5
-# - http, https: HTTP and HTTPS
-# - ws, wss: Websocket and Websocket Secure
-server.protocol = "socks|http|https|ws|wss"
+server.protocol = "wss"
+server.address = "10.1.1.1:443"
 
-server.address = "ADDRESS:PORT"  # address of the server
+http.path = "/proxy"
 
-# http.* is enabled when server.protocol is "http" or "https"
-http.path = "PATH" # HTTP request path. defualt "/"
+ws.path = "/proxy"
 
-# ws.* is enabled when server.protocol is "ws" or "wss"
-ws.path = "PATH" # websocket handshake path. default "/"
-
-# tls.* is enabled when server.protocol is "https" or "wss"
-tls.skip_verify = true|false # whether skip verify the server's certificate. default false
-tls.ca = "CA" # optional. using specific CA certificate to verify the server's certificate
+tls.skip_verify = false
+tls.ca = "server.crt"
 ```
+
+Basic fields:
+
+- `listen`: string, the client socks5 listening address.
+- `username`, `password`: string, username and password,
+- `server.protocol`: string, protocol of the server, the value may be:
+    - `socks`: pure socks5
+    - `http`, `https`: HTTP and HTTPS
+    - `ws`, `wss`: Websocket and Websocket Secure
+- `server.address`: string, address of the server.
+
+If `server.protocol` is `http` or `https`, `http.*` is enabled.
+
+- `http.path`: string, HTTP request path. Default `/`
+
+If `server.protocol` is `ws` or `wss`, `ws.*` is enabled.
+
+- `ws.path`: string, Websocket handshake path. Default `/`
+
+If the protocol if over TLS, i.e. `server.protocol` is `https` or `wss`, `tls.*` is enabled.
+
+- `tls.skip_verify`: boolean, skip verifying the server's certificate if the value is true. Default false. It's not safe to skip verifying the certificate, if the server's certificate is self-signed, please set `tls.ca` to verify the certificate.
+- `tls.ca`: string, a certificate file name. It's optional. If set, Subsocks will use the specific CA certificate to verify the server's certificate.
+
+If there is a `rules` field, enable smart proxy. There are two ways to configure proxy rules. One is setting the `rules` field to a table containing proxy rules:
+
+```toml
+[client.rules]
+"www.twitter.com" = "P"
+"*.github.com" = "D"
+"8.8.8.8" = "P"
+"1.0.1.0/24" = "D"
+"*" = "A"
+```
+
+Each pair in the table is a rule. The left side of `=` is the address, which can be:
+
+- Domain, a wildcard `*` indicates all subdomains of the domain;
+- IP and CIDR;
+- wildcard `*` represents all other addresses.
+
+The right side of `=` is the rule, which can be:
+
+- `P`, `proxy`: always via the server;
+- `D`, `direct`: always direct connect;
+- `A`, `auto`: automatic detection.
+
+Another way is using a separate file to configure rules and set the `rules` field to a string representing the file name:
+
+```toml
+rules = "rules.txt"
+```
+
+The contents of `rules.txt` are as follows:
+
+```
+www.twitter.com     P
+*.github.com        D
+8.8.8.8             P
+1.0.1.0/24          D
+
+*   A
+```
+
+Each line is a rule. Address and rule are separated by several spaces.
+
+### Server configuration
 
 The server configuration format is as follows:
 
 ```toml
 [server] # server configuration
 
-protocol = "socks|http|https|ws|wss" # protocol of the server.
-listen = "ADDRESS:PORT" # the server listening address
+protocol = "wss"
+listen = "0.0.0.0:443"
 
-# http.* is enabled when protocol is "http" or "https"
-http.path = "PATH" # HTTP request path. defualt "/"
+http.path = "/proxy"
 
-# ws.* is enabled when protocol is "ws" or "wss"
-ws.path = "PATH" # websocket handshake path. default "/"
-ws.compress = true|false # whether to compress. default false
+ws.path = "/proxy"
+ws.compress = true
 
-# tls.* is enabled when protocol is "https" or "wss"
-tls.cert = "CERT" # certificate file path.
-tls.key = "KEY" # key file path.
-# if tls.cert or tls.key is not set, key and certificate will be automatically generated
+tls.cert = "server.crt"
+tls.key = "server.key"
+```
 
-# if there is a users field, enable authorization.
+Basic fields:
 
-# method 1, using htpasswd file
-users = "HTPASSWD" # the htpasswd file path
+- `protocol`: string, protocol of the server. Same as the `server.protocol` field of the client.
+- `listen`: string, the server listening address.
 
-# method 2, configuring username-password pairs
+If `protocol` is `http` or `https`, `http.*` is enabled.
+
+- `http.path`: string, HTTP request path. Default `/`.
+
+If `protocol` is `ws` or `wss`, `ws.*` is enabled.
+
+- `ws.path`: string, Websocket handshake path. Default `/`.
+- `ws.compress`: boolean, whether to enable compression. Default false.
+
+If the protocol if over TLS, i.e. `protocol` is `https` or `wss`, `tls.*` is enabled.
+
+- `tls.cert`: string, certificate file name.
+- `tls.key`: string, key file name.
+
+If `tls.cert` or `tls.key` is not set, key and certificate will be automatically generated.
+
+If there is a `users` field, enable authorization. There are two ways to configure the user list. One is using the [htpasswd](https://httpd.apache.org/docs/2.4/programs/htpasswd.html) file, setting the `user` field to a string indicating the htpasswd file name:
+
+```toml
+users = "passfile"
+```
+
+Another way is configuring username-password pairs directly. Setting the `user` field to a table containing username-password pairs:
+
+```toml
 [server.users]
-"USERNAME-1" = "PASSWORD-1"
-"USERNAME-2" = "PASSWORD-2"
+"admin" = "123456"
+"guest" = "abcdef"
 ```
