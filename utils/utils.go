@@ -24,12 +24,18 @@ var (
 func Transport(rw1, rw2 io.ReadWriter) error {
 	errc := make(chan error, 1)
 	go func() {
-		_, err := io.Copy(rw1, rw2)
+		b := LPool.Get().([]byte)
+		defer LPool.Put(b)
+
+		_, err := io.CopyBuffer(rw1, rw2, b)
 		errc <- err
 	}()
 
 	go func() {
-		_, err := io.Copy(rw2, rw1)
+		b := LPool.Get().([]byte)
+		defer LPool.Put(b)
+
+		_, err := io.CopyBuffer(rw2, rw1, b)
 		errc <- err
 	}()
 

@@ -150,27 +150,27 @@ tls.ca = "server.crt"
 Basic fields:
 
 - `listen`: string, the client socks5 listening address.
-- `username`, `password`: string, username and password,
+- `username`, `password`: string, username and password.
 - `server.protocol`: string, protocol of the server, the value may be:
-    - `socks`: pure socks5
-    - `http`, `https`: HTTP and HTTPS
-    - `ws`, `wss`: Websocket and Websocket Secure
+    - `socks`: pure socks5;
+    - `http`, `https`: HTTP and HTTPS;
+    - `ws`, `wss`: Websocket and Websocket Secure.
 - `server.address`: string, address of the server.
 
 If `server.protocol` is `http` or `https`, `http.*` is enabled.
 
-- `http.path`: string, HTTP request path. Default `/`
+- `http.path`: string, HTTP request path. Default `/`.
 
 If `server.protocol` is `ws` or `wss`, `ws.*` is enabled.
 
-- `ws.path`: string, Websocket handshake path. Default `/`
+- `ws.path`: string, Websocket handshake path. Default `/`.
 
 If the protocol if over TLS, i.e. `server.protocol` is `https` or `wss`, `tls.*` is enabled.
 
 - `tls.skip_verify`: boolean, skip verifying the server's certificate if the value is true. Default false. It's not safe to skip verifying the certificate, if the server's certificate is self-signed, please set `tls.ca` to verify the certificate.
 - `tls.ca`: string, a certificate file name. It's optional. If set, Subsocks will use the specific CA certificate to verify the server's certificate.
 
-If there is a `rules` field, enable smart proxy. There are two ways to configure proxy rules. One is setting the `rules` field to a table containing proxy rules:
+If there is a `rules` field, enable smart proxy. Smart proxy is only available for the Connect method since we don't know the real peer when using Bind or UDP Associate. There are two ways to configure proxy rules. One is setting the `rules` field to a table containing proxy rules:
 
 ```toml
 [client.rules]
@@ -178,6 +178,8 @@ If there is a `rules` field, enable smart proxy. There are two ways to configure
 "*.github.com" = "D"
 "8.8.8.8" = "P"
 "1.0.1.0/24" = "D"
+"2001:db8::/32" = "P"
+
 "*" = "A"
 ```
 
@@ -185,13 +187,13 @@ Each pair in the table is a rule. The left side of `=` is the address, which can
 
 - Domain, a wildcard `*` indicates all subdomains of the domain;
 - IP and CIDR;
-- wildcard `*` represents all other addresses.
+- A single wildcard `*` represents all other addresses.
 
 The right side of `=` is the rule, which can be:
 
 - `P`, `proxy`: always via the server;
 - `D`, `direct`: always direct connect;
-- `A`, `auto`: automatic detection.
+- `A`, `auto`: automatic detection, proxy if the direct connection fails.
 
 Another way is using a separate file to configure rules and set the `rules` field to a string representing the file name:
 
@@ -206,6 +208,7 @@ www.twitter.com     P
 *.github.com        D
 8.8.8.8             P
 1.0.1.0/24          D
+2001:db8::/32       P
 
 *   A
 ```

@@ -35,30 +35,40 @@ func newDomainNode() *domainNode {
 	return &domainNode{children: make(map[string]*domainNode)}
 }
 
+type ipNode struct {
+	rule     int
+	bits     []byte
+	children [2]*ipNode
+}
+
 // Rules represents proxy rules
 type Rules struct {
 	domainTree *domainNode
-	ipMap      map[string]int
-	cidrList   []struct {
-		cidr *net.IPNet
-		rule int
-	}
-	other int
+	ipv4Tree   *ipNode
+	ipv6Tree   *ipNode
+	other      int
 
 	mu        sync.RWMutex
 	isProxy   map[string]bool
 	cacheFile *os.File
 }
 
-// NewRulesFromMap creates a Rules object from a map
-func NewRulesFromMap(rules map[string]string) (*Rules, error) {
-	r := &Rules{
+func newRules() *Rules {
+	return &Rules{
 		domainTree: newDomainNode(),
-		ipMap:      make(map[string]int),
+		ipv4Tree:   new(ipNode),
+		ipv6Tree:   new(ipNode),
 		isProxy:    make(map[string]bool),
 		other:      ruleAuto,
 	}
-	r.loadCache()
+}
+
+// NewRulesFromMap creates a Rules object from a map
+func NewRulesFromMap(rules map[string]string) (*Rules, error) {
+	r := newRules()
+	if err := r.loadCache(); err != nil {
+		return nil, err
+	}
 	for addr, rules := range rules {
 		rule, ok := ruleString2Rule[rules]
 		if !ok {
@@ -80,13 +90,10 @@ func NewRulesFromFile(path string) (*Rules, error) {
 		return nil, err
 	}
 
-	r := &Rules{
-		domainTree: newDomainNode(),
-		ipMap:      make(map[string]int),
-		isProxy:    make(map[string]bool),
-		other:      ruleAuto,
+	r := newRules()
+	if err := r.loadCache(); err != nil {
+		return nil, err
 	}
-	r.loadCache()
 
 	ln := 1
 	for s := bufio.NewScanner(f); s.Scan(); ln++ {
@@ -132,12 +139,18 @@ func (r *Rules) setRule(addr string, rule int) error {
 	if addr == "*" {
 		r.other = rule
 	} else if ip := net.ParseIP(addr); ip != nil {
-		r.ipMap[addr] = rule
+		if ipv4 := ip.To4(); ipv4 != nil {
+			setIPRule(r.ipv4Tree, ipv4, 32, rule)
+		} else {
+			setIPRule(r.ipv6Tree, ip.To16(), 128, rule)
+		}
 	} else if _, cidr, err := net.ParseCIDR(addr); err == nil {
-		r.cidrList = append(r.cidrList, struct {
-			cidr *net.IPNet
-			rule int
-		}{cidr, rule})
+		ones, _ := cidr.Mask.Size()
+		if ipv4 := cidr.IP.To4(); ipv4 != nil {
+			setIPRule(r.ipv4Tree, ipv4, ones, rule)
+		} else {
+			setIPRule(r.ipv6Tree, cidr.IP.To16(), ones, rule)
+		}
 	} else {
 		if err := r.setDomainRule(addr, rule); err != nil {
 			return err
@@ -145,6 +158,74 @@ func (r *Rules) setRule(addr string, rule int) error {
 	}
 
 	return nil
+}
+
+func setIPRule(root *ipNode, ip []byte, length int, rule int) {
+	var p, pp *ipNode
+	p = root
+	j := 0
+	for i := 0; i < length; i++ {
+		b := (ip[i/8] >> (8 - i%8 - 1)) & 1
+
+		if j >= len(p.bits) {
+			j = 0
+			pp = p
+			p = p.children[b]
+		}
+
+		var pnode, node *ipNode
+		if p == nil {
+			pnode = pp
+		} else if p.bits[j] != b {
+			// p: |------+---------|
+			//           ^ j
+			//    |--np--|----p----|
+
+			np := new(ipNode)
+			np.bits = make([]byte, j)
+			copy(np.bits, p.bits[:j])
+
+			pp.children[np.bits[0]] = np
+
+			copy(p.bits, p.bits[j:])
+			p.bits = p.bits[:len(p.bits)-j]
+
+			np.children[p.bits[0]] = p
+			pnode = np
+		} else if i == length-1 {
+			if j == len(p.bits)-1 {
+				node = p
+			} else {
+				np := new(ipNode)
+				np.bits = make([]byte, j+1)
+				copy(np.bits, p.bits[:j+1])
+
+				pp.children[np.bits[0]] = np
+				node = np
+
+				copy(p.bits, p.bits[j+1:])
+				p.bits = p.bits[:len(p.bits)-j-1]
+
+				np.children[p.bits[0]] = p
+			}
+		}
+
+		if pnode != nil {
+			node = new(ipNode)
+			node.bits = make([]byte, length-i)
+			for k := i; k < length; k++ {
+				node.bits[k-i] = (ip[k/8] >> (8 - k%8 - 1)) & 1
+			}
+			pnode.children[node.bits[0]] = node
+		}
+
+		if node != nil {
+			node.rule = rule
+			break
+		}
+
+		j++
+	}
 }
 
 func (r *Rules) setDomainRule(domain string, rule int) error {
@@ -177,20 +258,40 @@ func (r *Rules) setDomainRule(domain string, rule int) error {
 	return nil
 }
 
+func searchIPRule(root *ipNode, ip []byte) (rule int) {
+	p := root
+	j := 0
+	for i := 0; i < len(ip)*8; i++ {
+		b := (ip[i/8] >> (8 - i%8 - 1)) & 1
+
+		if j >= len(p.bits) {
+			j = 0
+			p = p.children[b]
+		}
+
+		if p == nil || p.bits[j] != b {
+			break
+		}
+
+		if j == len(p.bits)-1 && p.rule != ruleNone {
+			rule = p.rule
+		}
+
+		j++
+	}
+	return
+}
+
 func (r *Rules) getRule(addr string) (rule int) {
 	if r == nil {
 		return ruleProxy
 	}
 
 	if ip := net.ParseIP(addr); ip != nil {
-		if r, ok := r.ipMap[addr]; ok {
-			rule = r
-		}
-		for _, pair := range r.cidrList {
-			if pair.cidr.Contains(ip) {
-				rule = pair.rule
-				break
-			}
+		if ipv4 := ip.To4(); ipv4 != nil { // IPv4
+			rule = searchIPRule(r.ipv4Tree, ipv4)
+		} else { // IPv6
+			rule = searchIPRule(r.ipv6Tree, ip.To16())
 		}
 	} else {
 		parts := strings.Split(addr, ".")
