@@ -205,15 +205,17 @@ The contents of `rules.txt` are as follows:
 
 ```
 www.twitter.com     P
-*.github.com        D
-8.8.8.8             P
-1.0.1.0/24          D
-2001:db8::/32       P
+8.8.8.8
+2001:db8::/32
 
+*.github.com        D
+1.0.1.0/24
+
+# all others is automatic detection
 *   A
 ```
 
-Each line is a rule. Address and rule are separated by several spaces.
+Each line is a rule, except empty lines and comment lines(starting with `#`). Each line contains an address and an optional rule, separated by several spaces. If a line doesn't have a rule, it is the same as the previous line.
 
 ### Server configuration
 

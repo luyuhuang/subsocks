@@ -217,7 +217,7 @@ func TestRulesIllegal(t *testing.T) {
 }
 
 func TestRulesFile(t *testing.T) {
-	path := t.TempDir() + "/" + "rules.txt"
+	path := fmt.Sprintf("%s%crule.txt", t.TempDir(), os.PathSeparator)
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
 		t.Fatalf("Create file %q failed %q", path, err)
@@ -232,6 +232,8 @@ func TestRulesFile(t *testing.T) {
 	f.WriteString(" \t# twitter\n")
 	f.WriteString("twitter.com\t P\n")
 	f.WriteString("facebook.com \tD\n")
+	f.WriteString("*.bing.com\n")
+	f.WriteString("*.apple.com  \n")
 	f.Close()
 
 	rule, err := NewRulesFromFile(path)
@@ -250,12 +252,46 @@ func TestRulesFile(t *testing.T) {
 		{"raw.github.com", ruleDirect},
 		{"twitter.com", ruleProxy},
 		{"facebook.com", ruleDirect},
+		{"bing.com", ruleDirect},
+		{"cn.bing.com", ruleDirect},
+		{"apple.com", ruleDirect},
 	}
 
 	for _, c := range cases {
 		if r := rule.getRule(c.addr); r != c.rule {
 			t.Fatalf("%q rule got %d, want %d", c.addr, r, c.rule)
 		}
+	}
+}
+
+func TestRulesFileIllegal(t *testing.T) {
+	path := fmt.Sprintf("%s%crule1.txt", t.TempDir(), os.PathSeparator)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		t.Fatalf("Create file %q failed %q", path, err)
+	}
+
+	f.WriteString("*.google.com  \n")
+	f.WriteString("mail.google.com    D\n")
+	f.Close()
+
+	_, err = NewRulesFromFile(path)
+	if err == nil || !strings.Contains(err.Error(), "Illegal rule") {
+		t.Fatalf("Error %q does not contain 'Illegal rule'", err)
+	}
+
+	path = fmt.Sprintf("%s%crule2.txt", t.TempDir(), os.PathSeparator)
+	f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		t.Fatalf("Create file %q failed %q", path, err)
+	}
+
+	f.WriteString("*.google.com  x\n")
+	f.Close()
+
+	_, err = NewRulesFromFile(path)
+	if err == nil || !strings.Contains(err.Error(), "want proxy|direct|auto|P|D|A") {
+		t.Fatalf("Error %q does not contain 'want proxy|direct|auto|P|D|A'", err)
 	}
 }
 

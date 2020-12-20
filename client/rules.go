@@ -96,22 +96,26 @@ func NewRulesFromFile(path string) (*Rules, error) {
 	}
 
 	ln := 1
+	var addr string
+	var rule int
 	for s := bufio.NewScanner(f); s.Scan(); ln++ {
 		line := strings.TrimSpace(s.Text())
 		if line == "" || line[0] == '#' {
 			continue
 		}
 
-		i := strings.IndexAny(line, " \t")
-		if i < 0 {
-			return nil, fmt.Errorf("Illegal rule in line %d", ln)
-		}
-
-		addr := line[:i]
-		rules := strings.TrimSpace(line[i+1:])
-		rule, ok := ruleString2Rule[rules]
-		if !ok {
-			return nil, fmt.Errorf("Rule in line %d got %s, want proxy|direct|auto|P|D|A", ln, rules)
+		if i := strings.IndexAny(line, " \t"); i < 0 {
+			if rule == ruleNone {
+				return nil, fmt.Errorf("Illegal rule in line %d", ln)
+			}
+			addr = line
+		} else {
+			addr = line[:i]
+			rules := strings.TrimSpace(line[i+1:])
+			rule = ruleString2Rule[rules]
+			if rule == ruleNone {
+				return nil, fmt.Errorf("Rule in line %d got %s, want proxy|direct|auto|P|D|A", ln, rules)
+			}
 		}
 
 		if err := r.setRule(addr, rule); err != nil {
