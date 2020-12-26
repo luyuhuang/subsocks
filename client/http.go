@@ -8,9 +8,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
+
+	"github.com/luyuhuang/subsocks/socks"
+	"github.com/luyuhuang/subsocks/utils"
 )
 
 func (c *Client) wrapHTTPS(conn net.Conn) net.Conn {
@@ -19,6 +23,130 @@ func (c *Client) wrapHTTPS(conn net.Conn) net.Conn {
 
 func (c *Client) wrapHTTP(conn net.Conn) net.Conn {
 	return newHTTPWrapper(conn, c)
+}
+
+func isValidHTTPProxyRequest(req *http.Request) bool {
+	if req.URL.Host == "" {
+		return false
+	}
+	if req.Method != http.MethodConnect && req.URL.Scheme != "http" {
+		return false
+	}
+	return true
+}
+
+func httpReply(statusCode int, status string) *http.Response {
+	return &http.Response{
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		StatusCode: statusCode,
+		Status:     status,
+	}
+}
+
+func (c *Client) httpHandler(conn net.Conn) {
+	defer conn.Close()
+
+	req, err := http.ReadRequest(bufio.NewReader(conn))
+	if err != nil {
+		log.Printf("[http] read HTTP request failed: %s", err)
+		return
+	}
+	defer req.Body.Close()
+
+	if !isValidHTTPProxyRequest(req) {
+		log.Printf("[http] invalid http proxy request: %v", req)
+		httpReply(http.StatusBadRequest, "").Write(conn)
+		return
+	}
+
+	host := req.URL.Hostname()
+	addr := req.URL.Host
+	if req.URL.Port() == "" {
+		addr = net.JoinHostPort(addr, "80")
+	}
+
+	var nextHop net.Conn
+	var isProxy bool
+	if rule := c.Rules.getRule(host); rule == ruleProxy {
+		log.Printf(`[http] dial server to connect %s for %s`, addr, conn.RemoteAddr())
+
+		isProxy = true
+		nextHop, err = c.dialServer()
+		if err != nil {
+			log.Printf(`[http] dial server failed: %s`, err)
+			httpReply(http.StatusServiceUnavailable, "").Write(conn)
+			return
+		}
+
+	} else {
+		log.Printf(`[http] dial %s for %s`, addr, conn.RemoteAddr())
+
+		nextHop, err = net.Dial("tcp", addr)
+		if err != nil {
+			if rule == ruleAuto {
+				log.Printf(`[http] dial %s failed, dial server for %s`, addr, conn.RemoteAddr())
+
+				isProxy = true
+				nextHop, err = c.dialServer()
+				if err != nil {
+					log.Printf(`[http] dial server failed: %s`, err)
+					httpReply(http.StatusServiceUnavailable, "").Write(conn)
+					return
+				}
+				c.Rules.setAsProxy(host)
+
+			} else {
+				log.Printf(`[http] dial remote failed: %s`, err)
+				httpReply(http.StatusServiceUnavailable, "").Write(conn)
+				return
+			}
+		}
+
+	}
+	defer nextHop.Close()
+
+	var dash rune
+	if isProxy {
+		socksAddr, _ := socks.NewAddr(addr)
+		if err = socks.NewRequest(socks.CmdConnect, socksAddr).Write(nextHop); err != nil {
+			log.Printf(`[http] send request failed: %s`, err)
+			httpReply(http.StatusServiceUnavailable, "").Write(conn)
+			return
+		}
+		if r, e := socks.ReadReply(nextHop); e != nil {
+			log.Printf(`[http] read reply failed: %s`, err)
+			httpReply(http.StatusServiceUnavailable, "").Write(conn)
+			return
+		} else if r.Rep != socks.Succeeded {
+			log.Printf(`[http] server connect failed: %q`, r)
+			httpReply(http.StatusServiceUnavailable, "").Write(conn)
+			return
+		}
+
+		dash = '-'
+	} else {
+		dash = '='
+	}
+
+	if req.Method == http.MethodConnect {
+		if err = httpReply(http.StatusOK, "200 Connection Established").Write(conn); err != nil {
+			log.Printf(`[http] write reply failed: %s`, err)
+			return
+		}
+	} else {
+		req.Header.Del("Proxy-Connection")
+		if err = req.Write(nextHop); err != nil {
+			log.Printf(`[http] relay request failed: %s`, err)
+			return
+		}
+	}
+
+	log.Printf(`[http] tunnel established %s <%c> %s`, conn.RemoteAddr(), dash, addr)
+	if err := utils.Transport(conn, nextHop); err != nil {
+		log.Printf(`[http] transport failed: %s`, err)
+	}
+	log.Printf(`[http] tunnel disconnected %s >%c< %s`, conn.RemoteAddr(), dash, addr)
 }
 
 type httpWrapper struct {

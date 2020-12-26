@@ -15,7 +15,7 @@ func (c *Client) wrapSocks(conn net.Conn) net.Conn {
 	return conn
 }
 
-func (c *Client) handler(conn net.Conn) {
+func (c *Client) socks5Handler(conn net.Conn) {
 	defer conn.Close()
 
 	// select method

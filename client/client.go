@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bufio"
 	"crypto/tls"
 	"errors"
 	"io"
@@ -37,6 +38,7 @@ func (c *Client) Serve() error {
 		return err
 	}
 	log.Printf("Client starts to listen socks5://%s", listener.Addr().String())
+	log.Printf("Client starts to listen http://%s", listener.Addr().String())
 
 	for {
 		conn, err := listener.Accept()
@@ -45,8 +47,41 @@ func (c *Client) Serve() error {
 			continue
 		}
 
-		go c.handler(conn)
+		go func() {
+			br := bufio.NewReader(conn)
+			handler, err := probeProtocol(br)
+			if err != nil {
+				conn.Close()
+				log.Printf("Probe protocol failed: %s", err)
+				return
+			}
+
+			handler(c, &bufferedConn{conn, br})
+		}()
 	}
+}
+
+func probeProtocol(br *bufio.Reader) (func(*Client, net.Conn), error) {
+	b, err := br.Peek(1)
+	if err != nil {
+		return nil, err
+	}
+
+	switch b[0] {
+	case socks.Version:
+		return (*Client).socks5Handler, nil
+	default:
+		return (*Client).httpHandler, nil
+	}
+}
+
+type bufferedConn struct {
+	net.Conn
+	br *bufio.Reader
+}
+
+func (c *bufferedConn) Read(b []byte) (int, error) {
+	return c.br.Read(b)
 }
 
 var protocol2wrapper = map[string]func(*Client, net.Conn) net.Conn{
