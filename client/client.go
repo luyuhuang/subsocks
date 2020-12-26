@@ -41,6 +41,7 @@ func (c *Client) Serve() error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			log.Printf("Acceptance failed: %s", err)
 			continue
 		}
 

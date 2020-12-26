@@ -165,7 +165,7 @@ If `server.protocol` is `ws` or `wss`, `ws.*` is enabled.
 
 - `ws.path`: string, Websocket handshake path. Default `/`.
 
-If the protocol if over TLS, i.e. `server.protocol` is `https` or `wss`, `tls.*` is enabled.
+If the protocol is over TLS, i.e. `server.protocol` is `https` or `wss`, `tls.*` is enabled.
 
 - `tls.skip_verify`: boolean, skip verifying the server's certificate if the value is true. Default false. It's not safe to skip verifying the certificate, if the server's certificate is self-signed, please set `tls.ca` to verify the certificate.
 - `tls.ca`: string, a certificate file name. It's optional. If set, Subsocks will use the specific CA certificate to verify the server's certificate.
@@ -250,7 +250,7 @@ If `protocol` is `ws` or `wss`, `ws.*` is enabled.
 - `ws.path`: string, Websocket handshake path. Default `/`.
 - `ws.compress`: boolean, whether to enable compression. Default false.
 
-If the protocol if over TLS, i.e. `protocol` is `https` or `wss`, `tls.*` is enabled.
+If the protocol is over TLS, i.e. `protocol` is `https` or `wss`, `tls.*` is enabled.
 
 - `tls.cert`: string, certificate file name.
 - `tls.key`: string, key file name.
