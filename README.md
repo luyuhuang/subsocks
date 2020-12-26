@@ -13,8 +13,9 @@ Subsocks is a secure Socks5 proxy. It encapsulate Socks5 in other security proto
 ![protocols](./protocols.svg)
 
 - [x] Fully support Socks5 (Connect, Bind, UDP associate)
-- [x] HTTP / HTTPS
-- [x] Websocket
+- [x] Support HTTP proxy
+- [x] Transport over HTTP / HTTPS
+- [x] Transport over Websocket
 - [x] HTTP authorization
 - [x] Smart proxy
 
@@ -52,7 +53,7 @@ go build
 
 ### Getting started
 
-A Subsocks instance may be a client or a server, determined by the configuration. A Subsocks client receives Socks5 data from Hosts and encapsulate Socks5 data into a security protocol like HTTPS, then forward it to the Subsocks server. The Subsocks server unpacks the data from the client and accesses the internet.
+A Subsocks instance may be a client or a server, determined by the configuration. A Subsocks client receives Socks5 data from Apps and encapsulate Socks5 data into a security protocol like HTTPS, then forward it to the Subsocks server. The Subsocks server unpacks the data from the client and accesses the internet.
 
 ![forward](./forward.svg)
 
