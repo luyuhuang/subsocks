@@ -130,7 +130,9 @@ func (c *Client) httpHandler(conn net.Conn) {
 	}
 
 	if req.Method == http.MethodConnect {
-		if err = httpReply(http.StatusOK, "200 Connection Established").Write(conn); err != nil {
+		// the response couldn't contains 'Content-Length: 0'
+		b := []byte("HTTP/1.1 200 Connection established\r\n\r\n")
+		if _, err = conn.Write(b); err != nil {
 			log.Printf(`[http] write reply failed: %s`, err)
 			return
 		}
