@@ -7,11 +7,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 
 	"github.com/luyuhuang/subsocks/socks"
 	"github.com/luyuhuang/subsocks/utils"
@@ -153,10 +151,12 @@ func (c *Client) httpHandler(conn net.Conn) {
 
 type httpWrapper struct {
 	net.Conn
-	client *Client
-	buf    *bytes.Buffer
-	ioBuf  *bufio.Reader
-	auth   string
+	client     *Client
+	body       io.ReadCloser
+	sentHeader bool
+
+	ioBuf *bufio.Reader
+	auth  string
 }
 
 func newHTTPWrapper(conn net.Conn, client *Client) *httpWrapper {
@@ -169,7 +169,6 @@ func newHTTPWrapper(conn net.Conn, client *Client) *httpWrapper {
 	return &httpWrapper{
 		Conn:   conn,
 		client: client,
-		buf:    bytes.NewBuffer(make([]byte, 0, 1024)),
 		ioBuf:  bufio.NewReader(conn),
 		auth:   auth,
 	}
@@ -180,49 +179,48 @@ func (h *httpWrapper) Read(b []byte) (n int, err error) {
 		return 0, nil
 	}
 
-	if h.buf.Len() > 0 {
-		return h.buf.Read(b)
+	if h.body == nil {
+		res, err := http.ReadResponse(h.ioBuf, nil)
+		if err != nil {
+			return 0, err
+		}
+		if res.StatusCode != 200 {
+			res.Body.Close()
+			return 0, fmt.Errorf("Response status is not OK: %s", res.Status)
+		}
+		if !utils.StrInSlice("chunked", res.TransferEncoding) {
+			res.Body.Close()
+			return 0, fmt.Errorf("Response is not chunked")
+		}
+		h.body = res.Body
 	}
 
-	res, err := http.ReadResponse(h.ioBuf, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return 0, fmt.Errorf("Response status is not OK: %s", res.Status)
-	}
-
-	if n, err = res.Body.Read(b); err != nil && err != io.EOF {
-		return
-	}
-	if _, err = h.buf.ReadFrom(res.Body); err != nil && err != io.EOF {
-		return
-	}
-	err = nil
-	return
+	return h.body.Read(b)
 }
 
 func (h *httpWrapper) Write(b []byte) (n int, err error) {
-	req := http.Request{
-		Method: "POST",
-		Proto:  "HTTP/1.1",
-		URL: &url.URL{
-			Scheme: h.client.Config.ServerProtocol,
-			Host:   h.client.Config.ServerAddr,
-			Path:   h.client.Config.HTTPPath,
-		},
-		Host:          h.client.Config.ServerAddr,
-		ContentLength: int64(len(b)),
-		Body:          ioutil.NopCloser(bytes.NewBuffer(b)),
-		Header:        http.Header{},
+	if len(b) == 0 {
+		return 0, nil
 	}
-	req.Header.Add("Connection", "keep-alive")
-	if h.auth != "" {
-		req.Header.Add("Authorization", h.auth)
+	buf := bytes.NewBuffer(nil)
+	if !h.sentHeader {
+		buf.WriteString("POST ")
+		buf.WriteString(h.client.Config.HTTPPath)
+		buf.WriteString(" HTTP/1.1\r\n")
+		if h.auth != "" {
+			buf.WriteString("Authorization: ")
+			buf.WriteString(h.auth)
+			buf.WriteString("\r\n")
+		}
+		buf.WriteString("Transfer-Encoding: chunked\r\n")
+		buf.WriteString("\r\n")
+		h.sentHeader = true
 	}
-	if err := req.Write(h.Conn); err != nil {
+
+	buf.WriteString(fmt.Sprintf("%X\r\n", len(b)))
+	buf.Write(b)
+	buf.WriteString("\r\n")
+	if _, err := buf.WriteTo(h.Conn); err != nil {
 		return 0, err
 	}
 	return len(b), nil

@@ -101,7 +101,7 @@ func (w *wsStripper) handshake() (conn *websocket.Conn, err error) {
 		if w.server.Config.Verify != nil {
 			if !httpBasicAuth(req.Header.Get("Authorization"), w.server.Config.Verify) {
 				req.Body.Close()
-				http401Response().Write(w.Conn)
+				http4XXResponse(401).Write(w.Conn)
 				continue
 			}
 		}
@@ -109,7 +109,7 @@ func (w *wsStripper) handshake() (conn *websocket.Conn, err error) {
 			req.Header.Get("Connection") != "Upgrade" ||
 			req.Header.Get("Upgrade") != "websocket" {
 			req.Body.Close()
-			http404Response().Write(w.Conn)
+			http4XXResponse(404).Write(w.Conn)
 			continue
 		}
 

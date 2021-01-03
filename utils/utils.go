@@ -49,3 +49,13 @@ func Transport(rw1, rw2 io.ReadWriter) error {
 func StrEQ(s1, s2 string) bool {
 	return subtle.ConstantTimeCompare([]byte(s1), []byte(s2)) == 1
 }
+
+// StrInSlice return whether str in slice
+func StrInSlice(str string, slice []string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
