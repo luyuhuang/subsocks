@@ -207,6 +207,10 @@ func (h *httpWrapper) Write(b []byte) (n int, err error) {
 		buf.WriteString("POST ")
 		buf.WriteString(h.client.Config.HTTPPath)
 		buf.WriteString(" HTTP/1.1\r\n")
+		buf.WriteString("Host: ")
+		host, _, _ := net.SplitHostPort(h.client.Config.ServerAddr)
+		buf.WriteString(host)
+		buf.WriteString("\r\n")
 		if h.auth != "" {
 			buf.WriteString("Authorization: ")
 			buf.WriteString(h.auth)
