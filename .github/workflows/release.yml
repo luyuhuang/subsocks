@@ -20,7 +20,7 @@ jobs:
 
     - name: Build
       run: |
-        bash build.sh
+        bash build.sh ${GITHUB_REF##*/}
 
     - name: Release
       env:
@@ -61,6 +61,7 @@ jobs:
         docker buildx build \
         --platform=linux/amd64,linux/arm/v7,linux/arm64 \
         --output "type=image,push=true" \
+        --build-arg VERSION=${GITHUB_REF##*/} \
         --file ./Dockerfile . \
         --tag luyuhuang/subsocks:latest \
         --tag luyuhuang/subsocks:${GITHUB_REF##*/}
