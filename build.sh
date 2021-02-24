@@ -8,6 +8,7 @@ platforms=(
 "windows amd64 .exe"
 "windows 386 .exe"
 "darwin amd64"
+"darwin arm64"
 )
 
 rm -rf targets
