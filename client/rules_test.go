@@ -262,6 +262,8 @@ func TestRulesFile(t *testing.T) {
 			t.Fatalf("%q rule got %d, want %d", c.addr, r, c.rule)
 		}
 	}
+
+	rule.watcher.Close()
 }
 
 func TestRulesFileIllegal(t *testing.T) {
