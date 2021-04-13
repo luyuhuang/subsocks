@@ -3,10 +3,13 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 const (
@@ -51,15 +54,15 @@ type Rules struct {
 	mu        sync.RWMutex
 	isProxy   map[string]bool
 	cacheFile *os.File
+
+	watcher   *fsnotify.Watcher
+	rulesPath string
+	ruleMu    sync.RWMutex
 }
 
 func newRules() *Rules {
 	return &Rules{
-		domainTree: newDomainNode(),
-		ipv4Tree:   new(ipNode),
-		ipv6Tree:   new(ipNode),
-		isProxy:    make(map[string]bool),
-		other:      ruleAuto,
+		isProxy: make(map[string]bool),
 	}
 }
 
@@ -69,13 +72,19 @@ func NewRulesFromMap(rules map[string]string) (*Rules, error) {
 	if err := r.loadCache(); err != nil {
 		return nil, err
 	}
+
+	r.ipv4Tree = new(ipNode)
+	r.ipv6Tree = new(ipNode)
+	r.domainTree = newDomainNode()
+	r.other = ruleAuto
+
 	for addr, rules := range rules {
 		rule, ok := ruleString2Rule[rules]
 		if !ok {
 			return nil, fmt.Errorf("Rule of %q got %s, want proxy|direct|auto|P|D|A", addr, rules)
 		}
 
-		if err := r.setRule(addr, rule); err != nil {
+		if err := setRule(r.ipv4Tree, r.ipv6Tree, r.domainTree, &r.other, addr, rule); err != nil {
 			return nil, fmt.Errorf("Set rule failed: %s", err)
 		}
 	}
@@ -83,17 +92,43 @@ func NewRulesFromMap(rules map[string]string) (*Rules, error) {
 }
 
 // NewRulesFromFile creates a Rules object from a rule file
-func NewRulesFromFile(path string) (*Rules, error) {
-	f, err := os.Open(path)
-	defer f.Close()
+func NewRulesFromFile(path string) (r *Rules, err error) {
+	r = newRules()
+	if err := r.loadCache(); err != nil {
+		return nil, err
+	}
+
+	r.rulesPath = path
+	r.ipv4Tree, r.ipv6Tree, r.domainTree, r.other, err = scanRules(path)
 	if err != nil {
 		return nil, err
 	}
 
-	r := newRules()
-	if err := r.loadCache(); err != nil {
-		return nil, err
+	r.watcher, err = fsnotify.NewWatcher()
+	if err == nil {
+		err = r.watcher.Add(path)
 	}
+
+	if err != nil {
+		log.Printf("Watch %s failed", path)
+	} else {
+		go r.watchRules()
+	}
+
+	return r, nil
+}
+
+func scanRules(path string) (ipv4Tree, ipv6Tree *ipNode, domainTree *domainNode, other int, err error) {
+	f, err := os.Open(path)
+	defer f.Close()
+	if err != nil {
+		return
+	}
+
+	ipv4Tree = new(ipNode)
+	ipv6Tree = new(ipNode)
+	domainTree = newDomainNode()
+	other = ruleAuto
 
 	ln := 1
 	var addr string
@@ -106,7 +141,8 @@ func NewRulesFromFile(path string) (*Rules, error) {
 
 		if i := strings.IndexAny(line, " \t"); i < 0 {
 			if rule == ruleNone {
-				return nil, fmt.Errorf("Illegal rule in line %d", ln)
+				err = fmt.Errorf("Illegal rule in line %d", ln)
+				return
 			}
 			addr = line
 		} else {
@@ -114,15 +150,34 @@ func NewRulesFromFile(path string) (*Rules, error) {
 			rules := strings.TrimSpace(line[i+1:])
 			rule = ruleString2Rule[rules]
 			if rule == ruleNone {
-				return nil, fmt.Errorf("Rule in line %d got %s, want proxy|direct|auto|P|D|A", ln, rules)
+				err = fmt.Errorf("Rule in line %d got %s, want proxy|direct|auto|P|D|A", ln, rules)
+				return
 			}
 		}
 
-		if err := r.setRule(addr, rule); err != nil {
-			return nil, fmt.Errorf("Set rule failed: %s", err)
+		if err = setRule(ipv4Tree, ipv6Tree, domainTree, &other, addr, rule); err != nil {
+			err = fmt.Errorf("Set rule failed: %s", err)
+			return
 		}
 	}
-	return r, nil
+
+	return
+}
+
+func (r *Rules) watchRules() {
+	for event := range r.watcher.Events {
+		if event.Op&fsnotify.Write != 0 {
+			log.Printf("Reload %s", r.rulesPath)
+			r.ruleMu.Lock()
+			ipv4Tree, ipv6Tree, domainTree, other, err := scanRules(r.rulesPath)
+			if err == nil {
+				r.ipv4Tree, r.ipv6Tree, r.domainTree, r.other = ipv4Tree, ipv6Tree, domainTree, other
+			} else {
+				log.Println(err)
+			}
+			r.ruleMu.Unlock()
+		}
+	}
 }
 
 func (r *Rules) loadCache() error {
@@ -139,24 +194,24 @@ func (r *Rules) loadCache() error {
 	return nil
 }
 
-func (r *Rules) setRule(addr string, rule int) error {
+func setRule(ipv4Tree, ipv6Tree *ipNode, domainTree *domainNode, other *int, addr string, rule int) error {
 	if addr == "*" {
-		r.other = rule
+		*other = rule
 	} else if ip := net.ParseIP(addr); ip != nil {
 		if ipv4 := ip.To4(); ipv4 != nil {
-			setIPRule(r.ipv4Tree, ipv4, 32, rule)
+			setIPRule(ipv4Tree, ipv4, 32, rule)
 		} else {
-			setIPRule(r.ipv6Tree, ip.To16(), 128, rule)
+			setIPRule(ipv6Tree, ip.To16(), 128, rule)
 		}
 	} else if _, cidr, err := net.ParseCIDR(addr); err == nil {
 		ones, _ := cidr.Mask.Size()
 		if ipv4 := cidr.IP.To4(); ipv4 != nil {
-			setIPRule(r.ipv4Tree, ipv4, ones, rule)
+			setIPRule(ipv4Tree, ipv4, ones, rule)
 		} else {
-			setIPRule(r.ipv6Tree, cidr.IP.To16(), ones, rule)
+			setIPRule(ipv6Tree, cidr.IP.To16(), ones, rule)
 		}
 	} else {
-		if err := r.setDomainRule(addr, rule); err != nil {
+		if err := setDomainRule(domainTree, addr, rule); err != nil {
 			return err
 		}
 	}
@@ -232,7 +287,7 @@ func setIPRule(root *ipNode, ip []byte, length int, rule int) {
 	}
 }
 
-func (r *Rules) setDomainRule(domain string, rule int) error {
+func setDomainRule(p *domainNode, domain string, rule int) error {
 	if i := strings.IndexByte(domain, '*'); i != 0 && i != -1 ||
 		strings.Count(domain, "*") > 1 {
 		return fmt.Errorf("Domain %q contains illegal wildcards", domain)
@@ -240,7 +295,6 @@ func (r *Rules) setDomainRule(domain string, rule int) error {
 
 	parts := strings.Split(domain, ".")
 
-	p := r.domainTree
 	for i := len(parts) - 1; i > 0; i-- {
 		part := parts[i]
 		if p.children[part] == nil {
@@ -291,6 +345,7 @@ func (r *Rules) getRule(addr string) (rule int) {
 		return ruleProxy
 	}
 
+	r.ruleMu.RLock()
 	if ip := net.ParseIP(addr); ip != nil {
 		if ipv4 := ip.To4(); ipv4 != nil { // IPv4
 			rule = searchIPRule(r.ipv4Tree, ipv4)
@@ -312,6 +367,7 @@ func (r *Rules) getRule(addr string) (rule int) {
 			}
 		}
 	}
+	r.ruleMu.RUnlock()
 
 	if rule == ruleNone {
 		rule = r.other
