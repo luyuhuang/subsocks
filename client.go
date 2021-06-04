@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/luyuhuang/subsocks/client"
+	"github.com/luyuhuang/subsocks/utils"
 	"github.com/pelletier/go-toml"
 )
 
@@ -45,6 +46,17 @@ func launchClient(t *toml.Tree) {
 	cli.Config.ServerAddr = config.Server.Addr
 	cli.Config.HTTPPath = config.HTTP.Path
 	cli.Config.WSPath = config.WS.Path
+
+	switch users := t.Get("users").(type) {
+	case string:
+		cli.Config.Verify = utils.VerifyByHtpasswd(users)
+	case *toml.Tree:
+		m := make(map[string]string)
+		if err := users.Unmarshal(&m); err != nil {
+			log.Fatalf("Parse 'server.users' configuration failed: %s", err)
+		}
+		cli.Config.Verify = utils.VerifyByMap(m)
+	}
 
 	switch rules := t.Get("rules").(type) {
 	case string:

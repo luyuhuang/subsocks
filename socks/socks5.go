@@ -16,7 +16,10 @@ import (
 )
 
 // Version = 5
-const Version = 5
+const (
+	Version     = 5
+	UserPassVer = 1
+)
 
 // Methods
 const (
@@ -119,6 +122,145 @@ func WriteMethods(methods []uint8, w io.Writer) error {
 
 	_, err := w.Write(b)
 	return err
+}
+
+/*
+ Username/Password authentication request
+  +----+------+----------+------+----------+
+  |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
+  +----+------+----------+------+----------+
+  | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
+  +----+------+----------+------+----------+
+*/
+type UserPassRequest struct {
+	Version  byte
+	Username string
+	Password string
+}
+
+func NewUserPassRequest(ver byte, u, p string) *UserPassRequest {
+	return &UserPassRequest{
+		Version:  ver,
+		Username: u,
+		Password: p,
+	}
+}
+
+func ReadUserPassRequest(r io.Reader) (*UserPassRequest, error) {
+	// b := make([]byte, 513)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
+
+	n, err := io.ReadAtLeast(r, b, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	if b[0] != UserPassVer {
+		return nil, ErrBadVersion
+	}
+
+	req := &UserPassRequest{
+		Version: b[0],
+	}
+
+	ulen := int(b[1])
+	length := ulen + 3
+
+	if n < length {
+		if _, err := io.ReadFull(r, b[n:length]); err != nil {
+			return nil, err
+		}
+		n = length
+	}
+	req.Username = string(b[2 : 2+ulen])
+
+	plen := int(b[length-1])
+	length += plen
+	if n < length {
+		if _, err := io.ReadFull(r, b[n:length]); err != nil {
+			return nil, err
+		}
+	}
+	req.Password = string(b[3+ulen : length])
+	return req, nil
+}
+
+func (req *UserPassRequest) Write(w io.Writer) error {
+	// b := make([]byte, 513)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
+
+	b[0] = req.Version
+	ulen := len(req.Username)
+	b[1] = byte(ulen)
+	length := 2 + ulen
+	copy(b[2:length], req.Username)
+
+	plen := len(req.Password)
+	b[length] = byte(plen)
+	length++
+	copy(b[length:length+plen], req.Password)
+	length += plen
+
+	_, err := w.Write(b[:length])
+	return err
+}
+
+func (req *UserPassRequest) String() string {
+	return fmt.Sprintf("%d %s:%s",
+		req.Version, req.Username, req.Password)
+}
+
+/*
+ Username/Password authentication response
+  +----+--------+
+  |VER | STATUS |
+  +----+--------+
+  | 1  |   1    |
+  +----+--------+
+*/
+type UserPassResponse struct {
+	Version byte
+	Status  byte
+}
+
+func NewUserPassResponse(ver, status byte) *UserPassResponse {
+	return &UserPassResponse{
+		Version: ver,
+		Status:  status,
+	}
+}
+
+func ReadUserPassResponse(r io.Reader) (*UserPassResponse, error) {
+	// b := make([]byte, 2)
+	b := utils.SPool.Get().([]byte)
+	defer utils.SPool.Put(b)
+
+	if _, err := io.ReadFull(r, b[:2]); err != nil {
+		return nil, err
+	}
+
+	if b[0] != UserPassVer {
+		return nil, ErrBadVersion
+	}
+
+	res := &UserPassResponse{
+		Version: b[0],
+		Status:  b[1],
+	}
+
+	return res, nil
+}
+
+func (res *UserPassResponse) Write(w io.Writer) error {
+	_, err := w.Write([]byte{res.Version, res.Status})
+	return err
+}
+
+func (res *UserPassResponse) String() string {
+	return fmt.Sprintf("%d %d",
+		res.Version, res.Status)
 }
 
 /*

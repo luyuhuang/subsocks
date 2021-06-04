@@ -3,7 +3,10 @@ package utils
 import (
 	"crypto/subtle"
 	"io"
+	"log"
 	"sync"
+
+	"github.com/tg123/go-htpasswd"
 )
 
 // buffer pools
@@ -58,4 +61,26 @@ func StrInSlice(str string, slice []string) bool {
 		}
 	}
 	return false
+}
+
+// VerifyByMap returns an verifier that verify by an username-password map
+func VerifyByMap(users map[string]string) func(string, string) bool {
+	return func(username, password string) bool {
+		pw, ok := users[username]
+		if !ok {
+			return false
+		}
+		return StrEQ(pw, password)
+	}
+}
+
+// VerifyByHtpasswd returns an verifier that verify by a htpasswd file
+func VerifyByHtpasswd(users string) func(string, string) bool {
+	f, err := htpasswd.New(users, htpasswd.DefaultSystems, nil)
+	if err != nil {
+		log.Fatalf("Load htpasswd file failed: %s", err)
+	}
+	return func(username, password string) bool {
+		return f.Match(username, password)
+	}
 }

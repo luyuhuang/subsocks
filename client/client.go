@@ -128,6 +128,8 @@ type Config struct {
 	Username string
 	Password string
 
+	Verify func(string, string) bool
+
 	ServerProtocol string
 	ServerAddr     string
 	HTTPPath       string

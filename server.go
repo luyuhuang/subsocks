@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/luyuhuang/subsocks/server"
+	"github.com/luyuhuang/subsocks/utils"
 	"github.com/pelletier/go-toml"
 )
 
@@ -43,13 +44,13 @@ func launchServer(t *toml.Tree) {
 
 	switch users := t.Get("users").(type) {
 	case string:
-		ser.SetUsersFromHtpasswd(users)
+		ser.Config.Verify = utils.VerifyByHtpasswd(users)
 	case *toml.Tree:
 		m := make(map[string]string)
 		if err := users.Unmarshal(&m); err != nil {
 			log.Fatalf("Parse 'server.users' configuration failed: %s", err)
 		}
-		ser.SetUsersFromMap(m)
+		ser.Config.Verify = utils.VerifyByMap(m)
 	}
 
 	if needsTLS[config.Protocol] {

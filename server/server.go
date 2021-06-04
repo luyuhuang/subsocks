@@ -5,9 +5,6 @@ import (
 	"errors"
 	"log"
 	"net"
-
-	"github.com/luyuhuang/subsocks/utils"
-	"github.com/tg123/go-htpasswd"
 )
 
 // Server holds contexts of the server
@@ -23,28 +20,6 @@ func NewServer(protocol, addr string) *Server {
 			Protocol: protocol,
 			Addr:     addr,
 		},
-	}
-}
-
-// SetUsersFromMap sets users from a user-password map
-func (s *Server) SetUsersFromMap(users map[string]string) {
-	s.Config.Verify = func(username, password string) bool {
-		pw, ok := users[username]
-		if !ok {
-			return false
-		}
-		return utils.StrEQ(pw, password)
-	}
-}
-
-// SetUsersFromHtpasswd sets users from a htpasswd file
-func (s *Server) SetUsersFromHtpasswd(users string) {
-	f, err := htpasswd.New(users, htpasswd.DefaultSystems, nil)
-	if err != nil {
-		log.Fatalf("Load htpasswd file failed: %s", err)
-	}
-	s.Config.Verify = func(username, password string) bool {
-		return f.Match(username, password)
 	}
 }
 
