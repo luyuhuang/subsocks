@@ -123,7 +123,7 @@ func TestHTTPAuth(t *testing.T) {
 
 		ser := NewServer("http", "127.0.0.1:1080")
 		ser.Config.HTTPPath = "/proxy"
-		ser.SetUsersFromMap(map[string]string{
+		ser.Config.Verify = utils.VerifyByMap(map[string]string{
 			"admin": "123456",
 			"user":  "abcde",
 		})
