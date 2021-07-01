@@ -63,7 +63,7 @@ func (c *Client) chooseMethod(methods []uint8) uint8 {
 	for _, m := range methods {
 		switch m {
 		case socks.MethodNoAuth:
-			supportNoAuth = true
+			supportNoAuth = c.Config.Verify == nil
 		case socks.MethodUserPass:
 			supportUserPass = c.Config.Verify != nil
 		}
@@ -93,13 +93,13 @@ func (c *Client) authUserPass(conn net.Conn) (err error) {
 	}
 
 	if !c.Config.Verify(req.Username, req.Password) {
-		if e := socks.NewUserPassResponse(socks.UserPassVer, 0).Write(conn); e != nil {
+		if e := socks.NewUserPassResponse(socks.UserPassVer, 1).Write(conn); e != nil {
 			log.Printf(`[socks5] write reply failed: %s`, e)
 		}
 		return fmt.Errorf(`verify user %s failed`, req.Username)
 	}
 
-	return socks.NewUserPassResponse(socks.UserPassVer, 1).Write(conn)
+	return socks.NewUserPassResponse(socks.UserPassVer, 0).Write(conn)
 }
 
 func (c *Client) handleConnect(conn net.Conn, req *socks.Request) {

@@ -4,13 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/luyuhuang/subsocks/utils"
 )
@@ -51,7 +49,7 @@ func (h *httpStripper) Read(b []byte) (n int, err error) {
 			return 0, err
 		}
 		if h.server.Config.Verify != nil {
-			if !httpBasicAuth(req.Header.Get("Authorization"), h.server.Config.Verify) {
+			if !utils.HttpBasicAuth(req.Header.Get("Authorization"), h.server.Config.Verify) {
 				req.Body.Close()
 				http4XXResponse(401).Write(h.Conn)
 				continue
@@ -109,21 +107,4 @@ func http4XXResponse(code int) *http.Response {
 		Body:          ioutil.NopCloser(body),
 		Header:        header,
 	}
-}
-
-func httpBasicAuth(auth string, verify func(string, string) bool) bool {
-	prefix := "Basic "
-	if !strings.HasPrefix(auth, prefix) {
-		return false
-	}
-	auth = strings.Trim(auth[len(prefix):], " ")
-	dc, err := base64.StdEncoding.DecodeString(auth)
-	if err != nil {
-		return false
-	}
-	groups := strings.Split(string(dc), ":")
-	if len(groups) != 2 {
-		return false
-	}
-	return verify(groups[0], groups[1])
 }

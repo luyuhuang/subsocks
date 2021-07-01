@@ -58,6 +58,16 @@ func (c *Client) httpHandler(conn net.Conn) {
 		return
 	}
 
+	if c.Config.Verify != nil {
+		if !utils.HttpBasicAuth(req.Header.Get("Proxy-Authorization"), c.Config.Verify) {
+			reply := httpReply(http.StatusProxyAuthRequired, "")
+			reply.Header = make(http.Header)
+			reply.Header.Add("Proxy-Authenticate", `Basic realm="auth"`)
+			reply.Write(conn)
+			return
+		}
+	}
+
 	host := req.URL.Hostname()
 	addr := req.URL.Host
 	if req.URL.Port() == "" {

@@ -99,7 +99,7 @@ func (w *wsStripper) handshake() (conn *websocket.Conn, err error) {
 		}
 
 		if w.server.Config.Verify != nil {
-			if !httpBasicAuth(req.Header.Get("Authorization"), w.server.Config.Verify) {
+			if !utils.HttpBasicAuth(req.Header.Get("Authorization"), w.server.Config.Verify) {
 				req.Body.Close()
 				http4XXResponse(401).Write(w.Conn)
 				continue
