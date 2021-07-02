@@ -148,28 +148,36 @@ tls.skip_verify = false
 tls.ca = "server.crt"
 ```
 
-Basic fields:
+#### Basic fields
 
-- `listen`: string, the client socks5 listening address.
-- `username`, `password`: string, username and password.
+- `listen`: string, the client socks5/http listening address.
+- `username`, `password`: string, username and password used to connect to the server.
 - `server.protocol`: string, protocol of the server, the value may be:
     - `socks`: pure socks5;
     - `http`, `https`: HTTP and HTTPS;
     - `ws`, `wss`: Websocket and Websocket Secure.
 - `server.address`: string, address of the server.
 
+#### HTTP
+
 If `server.protocol` is `http` or `https`, `http.*` is enabled.
 
 - `http.path`: string, HTTP request path. Default `/`.
+
+#### Websocket
 
 If `server.protocol` is `ws` or `wss`, `ws.*` is enabled.
 
 - `ws.path`: string, Websocket handshake path. Default `/`.
 
+#### TLS/SSL
+
 If the protocol is over TLS, i.e. `server.protocol` is `https` or `wss`, `tls.*` is enabled.
 
 - `tls.skip_verify`: boolean, skip verifying the server's certificate if the value is true. Default false. It's not safe to skip verifying the certificate, if the server's certificate is self-signed, please set `tls.ca` to verify the certificate.
 - `tls.ca`: string, a certificate file name. It's optional. If set, Subsocks will use the specific CA certificate to verify the server's certificate.
+
+#### Smart Proxy
 
 If there is a `rules` field, enable smart proxy. Smart proxy is only available for the Connect method since we don't know the real peer when using Bind or UDP Associate. There are two ways to configure proxy rules. One is setting the `rules` field to a table containing proxy rules:
 
@@ -216,7 +224,23 @@ www.twitter.com     P
 *   A
 ```
 
-Each line is a rule, except empty lines and comment lines(starting with `#`). Each line contains an address and an optional rule, separated by several spaces. If a line doesn't have a rule, it is the same as the previous line.
+Each line is a rule, except empty lines and comment lines(starting with `#`). Each line contains an address and an optional rule, separated by several spaces. If a line doesn't have a rule, its rule is the same as the previous line.
+
+#### Authorization
+
+If there is a `users` field, then enable authorization. In this case, applications that use proxy via the client must be authorized. There are two ways to configure the user list. One is using the [htpasswd](https://httpd.apache.org/docs/2.4/programs/htpasswd.html) file, setting the `user` field to a string indicating the htpasswd file name:
+
+```toml
+users = "passfile"
+```
+
+Another way is configuring username-password pairs directly. Setting the `users` field to a table containing username-password pairs:
+
+```toml
+[client.users]
+"admin" = "123456"
+"guest" = "abcdef"
+```
 
 ### Server configuration
 
@@ -237,19 +261,25 @@ tls.cert = "server.crt"
 tls.key = "server.key"
 ```
 
-Basic fields:
+#### Basic fields
 
 - `protocol`: string, protocol of the server. Same as the `server.protocol` field of the client.
 - `listen`: string, the server listening address.
+
+#### HTTP
 
 If `protocol` is `http` or `https`, `http.*` is enabled.
 
 - `http.path`: string, HTTP request path. Default `/`.
 
+#### Websocket
+
 If `protocol` is `ws` or `wss`, `ws.*` is enabled.
 
 - `ws.path`: string, Websocket handshake path. Default `/`.
 - `ws.compress`: boolean, whether to enable compression. Default false.
+
+#### TLS/SSL
 
 If the protocol is over TLS, i.e. `protocol` is `https` or `wss`, `tls.*` is enabled.
 
@@ -258,16 +288,6 @@ If the protocol is over TLS, i.e. `protocol` is `https` or `wss`, `tls.*` is ena
 
 If `tls.cert` or `tls.key` is not set, key and certificate will be automatically generated.
 
-If there is a `users` field, enable authorization. There are two ways to configure the user list. One is using the [htpasswd](https://httpd.apache.org/docs/2.4/programs/htpasswd.html) file, setting the `user` field to a string indicating the htpasswd file name:
+#### Authorization
 
-```toml
-users = "passfile"
-```
-
-Another way is configuring username-password pairs directly. Setting the `user` field to a table containing username-password pairs:
-
-```toml
-[server.users]
-"admin" = "123456"
-"guest" = "abcdef"
-```
+If there is a `users` field, then enable authorization. This means the client must use its username and password for authorization. Configuration of `server.users` is the same as `client.users`.
