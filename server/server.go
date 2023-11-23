@@ -11,6 +11,7 @@ import (
 type Server struct {
 	Config    *Config
 	TLSConfig *tls.Config
+	SSHConfig *SSHConfig
 }
 
 // NewServer creates a server
@@ -29,6 +30,7 @@ var protocol2handler = map[string]func(*Server, net.Conn){
 	"socks": (*Server).socksHandler,
 	"ws":    (*Server).wsHandler,
 	"wss":   (*Server).wssHandler,
+	"ssh":   (*Server).SSHHandler,
 }
 
 // Serve start the server
@@ -66,4 +68,9 @@ type Config struct {
 	HTTPPath   string
 	WSPath     string
 	WSCompress bool
+}
+
+type SSHConfig struct {
+	Cert string
+	Key  string
 }

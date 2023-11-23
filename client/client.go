@@ -90,6 +90,7 @@ var protocol2wrapper = map[string]func(*Client, net.Conn) net.Conn{
 	"socks": (*Client).wrapSocks,
 	"ws":    (*Client).wrapWS,
 	"wss":   (*Client).wrapWSS,
+	"ssh":   (*Client).wrapSSH,
 }
 
 func (c *Client) dialServer() (net.Conn, error) {

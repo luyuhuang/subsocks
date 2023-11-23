@@ -31,6 +31,10 @@ func launchServer(t *toml.Tree) {
 			Cert string `toml:"cert"`
 			Key  string `toml:"key"`
 		} `toml:"tls"`
+		SSH struct {
+			Cert string `toml:"cert"`
+			Key  string `toml:"key"`
+		} `toml:"ssh"`
 	}{}
 
 	if err := t.Unmarshal(&config); err != nil {
@@ -59,6 +63,13 @@ func launchServer(t *toml.Tree) {
 			log.Fatalf("Get TLS configuration failed: %s", err)
 		}
 		ser.TLSConfig = tlsConfig
+	}
+
+	if config.Protocol == "ssh" {
+		ser.SSHConfig = &server.SSHConfig{
+			Cert: config.SSH.Cert,
+			Key:  config.SSH.Key,
+		}
 	}
 
 	if err := ser.Serve(); err != nil {
