@@ -163,16 +163,6 @@ func getServerSSHConfig(cert string, key string, conf *server.Config) (*ssh.Serv
 			}
 			return nil, errors.New("ssh verify error: wrong username or password")
 		},
-		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
-			if authorizedKeysMap[string(pubKey.Marshal())] {
-				return &ssh.Permissions{
-					Extensions: map[string]string{
-						"pubkey-fp": ssh.FingerprintSHA256(pubKey),
-					},
-				}, nil
-			}
-			return nil, errors.New("ssh verify error: key authentication failed")
-		},
 	}
 
 	// 私钥
