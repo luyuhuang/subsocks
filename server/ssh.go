@@ -97,7 +97,7 @@ func (s *sshStripper) serverInit() (*ssh.Channel, error) {
 					},
 				}, nil
 			}
-			return nil, err
+			return nil, errors.New("ssh verify error: key authentication failed")
 		},
 	}
 
