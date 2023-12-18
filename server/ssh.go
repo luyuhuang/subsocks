@@ -84,10 +84,10 @@ func (s *sshStripper) serverInit() (*ssh.Channel, error) {
 	// 服务端配置
 	config := &ssh.ServerConfig{
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-			if c.User() == "subsocks" && string(pass) == "subsocks" {
+			if s.server.Config.Verify(c.User(), string(pass)) {
 				return nil, nil
 			}
-			return nil, err
+			return nil, errors.New("ssh verify error: wrong username or password")
 		},
 		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
 			if authorizedKeysMap[string(pubKey.Marshal())] {
