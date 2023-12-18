@@ -16,7 +16,7 @@ type sshStripper struct {
 	net.Conn
 	server *Server
 
-	_channel *ssh.Channel
+	sshChannel *ssh.Channel
 }
 
 func newSSHStripper(server *Server, conn net.Conn) *sshStripper {
@@ -24,20 +24,20 @@ func newSSHStripper(server *Server, conn net.Conn) *sshStripper {
 		Conn:   conn,
 		server: server,
 
-		_channel: nil,
+		sshChannel: nil,
 	}
 }
 
 func (s *sshStripper) Close() error {
-	if s._channel != nil {
-		(*s._channel).Close()
+	if s.sshChannel != nil {
+		(*s.sshChannel).Close()
 	}
 	return s.Conn.Close()
 }
 
 func (s *sshStripper) Read(b []byte) (n int, err error) {
-	if s._channel == nil {
-		s._channel, err = s.serverInit()
+	if s.sshChannel == nil {
+		s.sshChannel, err = s.serverInit()
 		if err != nil {
 			return 0, errors.New("ssh server init error")
 		}
@@ -47,7 +47,7 @@ func (s *sshStripper) Read(b []byte) (n int, err error) {
 		return 0, nil
 	}
 
-	n, err = (*s._channel).Read(b)
+	n, err = (*s.sshChannel).Read(b)
 
 	if err == nil {
 		return n, err
@@ -56,7 +56,7 @@ func (s *sshStripper) Read(b []byte) (n int, err error) {
 }
 
 func (s *sshStripper) Write(b []byte) (n int, err error) {
-	n, err = (*s._channel).Write(b)
+	n, err = (*s.sshChannel).Write(b)
 	if err == nil {
 		return n, err
 	}

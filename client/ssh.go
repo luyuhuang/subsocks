@@ -20,36 +20,36 @@ type sshWrapper struct {
 	username string
 	password string
 
-	_client  *ssh.Client
-	_session *ssh.Session
-	_input   io.Writer
-	_output  io.Reader
+	sshClient  *ssh.Client
+	sshSession *ssh.Session
+	sshInput   io.Writer
+	sshOutput  io.Reader
 }
 
 func newSSHWrapper(conn net.Conn, client *Client) *sshWrapper {
 	var wrapper = &sshWrapper{
-		Conn:      conn,
-		client:    client,
-		handshark: false,
-		username:  client.Config.Username,
-		password:  client.Config.Password,
-		_client:   nil,
-		_session:  nil,
-		_input:    nil,
-		_output:   nil,
+		Conn:       conn,
+		client:     client,
+		handshark:  false,
+		username:   client.Config.Username,
+		password:   client.Config.Password,
+		sshClient:  nil,
+		sshSession: nil,
+		sshInput:   nil,
+		sshOutput:  nil,
 	}
 	return wrapper
 }
 
 func (s *sshWrapper) Close() error {
-	if s._session != nil {
-		err := s._session.Close()
+	if s.sshSession != nil {
+		err := s.sshSession.Close()
 		if err != nil {
 			return err
 		}
 	}
-	if s._client != nil {
-		err := s._client.Close()
+	if s.sshClient != nil {
+		err := s.sshClient.Close()
 		if err != nil {
 			return err
 		}
@@ -62,7 +62,7 @@ func (s *sshWrapper) Read(b []byte) (n int, err error) {
 		return 0, nil
 	}
 
-	n, err = s._output.Read(b)
+	n, err = s.sshOutput.Read(b)
 
 	if err == nil {
 		return n, err
@@ -84,17 +84,17 @@ func (s *sshWrapper) Write(b []byte) (n int, err error) {
 		if err != nil {
 			return 0, errors.New("ssh new client error")
 		}
-		s._client = ssh.NewClient(c, chans, reqs)
-		s._session, err = s._client.NewSession()
+		s.sshClient = ssh.NewClient(c, chans, reqs)
+		s.sshSession, err = s.sshClient.NewSession()
 		if err != nil {
 			return 0, errors.New("ssh new session error")
 		}
 
-		s._input, err = s._session.StdinPipe()
+		s.sshInput, err = s.sshSession.StdinPipe()
 		if err != nil {
 			return 0, errors.New("ssh set input error")
 		}
-		s._output, err = s._session.StdoutPipe()
+		s.sshOutput, err = s.sshSession.StdoutPipe()
 		if err != nil {
 			return 0, errors.New("ssh set output error")
 		}
@@ -105,7 +105,7 @@ func (s *sshWrapper) Write(b []byte) (n int, err error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
-	n, err = s._input.Write(b)
+	n, err = s.sshInput.Write(b)
 	if err == nil {
 		return n, err
 	}
