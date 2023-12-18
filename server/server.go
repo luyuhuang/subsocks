@@ -5,13 +5,15 @@ import (
 	"errors"
 	"log"
 	"net"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // Server holds contexts of the server
 type Server struct {
 	Config    *Config
 	TLSConfig *tls.Config
-	SSHConfig *SSHConfig
+	SSHConfig *ssh.ServerConfig
 }
 
 // NewServer creates a server
