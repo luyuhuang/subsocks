@@ -38,7 +38,7 @@ func (s *sshStripper) Read(b []byte) (n int, err error) {
 	if s.sshChannel == nil {
 		s.sshChannel, err = s.serverInit()
 		if err != nil {
-			return 0, errors.New("ssh server init error")
+			return 0, err
 		}
 	}
 
@@ -63,7 +63,7 @@ func (s *sshStripper) Write(b []byte) (n int, err error) {
 }
 
 func (s *sshStripper) serverInit() (*ssh.Channel, error) {
-	// 监听握手
+	// listen handshark
 	_, chans, reqs, err := ssh.NewServerConn(s.Conn, s.server.SSHConfig)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (s *sshStripper) serverInit() (*ssh.Channel, error) {
 
 	go ssh.DiscardRequests(reqs)
 
-	// 获得channal
+	// get channal
 	for newChannel := range chans {
 		// only session
 		if newChannel.ChannelType() != "session" {

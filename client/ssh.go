@@ -72,15 +72,8 @@ func (s *sshWrapper) Read(b []byte) (n int, err error) {
 
 func (s *sshWrapper) Write(b []byte) (n int, err error) {
 	if !s.handshark {
-		sshConf := &ssh.ClientConfig{
-			User: s.username,
-			Auth: []ssh.AuthMethod{
-				ssh.Password(s.password),
-			},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		}
-
-		c, chans, reqs, err := ssh.NewClientConn(s.Conn, s.client.Config.Addr, sshConf)
+		// dial server
+		c, chans, reqs, err := ssh.NewClientConn(s.Conn, s.client.Config.Addr, s.client.SSHConfig)
 		if err != nil {
 			return 0, errors.New("ssh new client error")
 		}
