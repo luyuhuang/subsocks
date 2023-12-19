@@ -9,12 +9,14 @@ import (
 	"net"
 
 	"github.com/luyuhuang/subsocks/socks"
+	"golang.org/x/crypto/ssh"
 )
 
 // Client holds contexts of the client
 type Client struct {
 	Config    *Config
 	TLSConfig *tls.Config
+	SSHConfig *ssh.ClientConfig
 	Rules     *Rules
 }
 
@@ -90,6 +92,7 @@ var protocol2wrapper = map[string]func(*Client, net.Conn) net.Conn{
 	"socks": (*Client).wrapSocks,
 	"ws":    (*Client).wrapWS,
 	"wss":   (*Client).wrapWSS,
+	"ssh":   (*Client).wrapSSH,
 }
 
 func (c *Client) dialServer() (net.Conn, error) {

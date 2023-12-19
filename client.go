@@ -7,11 +7,13 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/luyuhuang/subsocks/client"
 	"github.com/luyuhuang/subsocks/utils"
 	"github.com/pelletier/go-toml"
+	"golang.org/x/crypto/ssh"
 )
 
 func launchClient(t *toml.Tree) {
@@ -33,6 +35,10 @@ func launchClient(t *toml.Tree) {
 			SkipVerify bool   `toml:"skip_verify"`
 			CA         string `toml:"ca"`
 		} `toml:"tls"`
+		SSH struct {
+			Key        string `toml:"key"`
+			Passphrase string `toml:"passphrase"`
+		} `toml:"ssh"`
 	}{}
 
 	if err := t.Unmarshal(&config); err != nil {
@@ -83,6 +89,14 @@ func launchClient(t *toml.Tree) {
 			log.Fatalf("Get TLS configuration failed: %s", err)
 		}
 		cli.TLSConfig = tlsConfig
+	}
+
+	if config.Server.Protocol == "ssh" {
+		sshConfig, err := getClientSSHConfit(config.Username, config.Password, config.SSH.Key, config.SSH.Passphrase)
+		if err != nil {
+			log.Fatalf("Get SSH configuration failed: %s", err)
+		}
+		cli.SSHConfig = sshConfig
 	}
 
 	if err := cli.Serve(); err != nil {
@@ -146,4 +160,41 @@ func loadCA(caFile string) (cp *x509.CertPool, err error) {
 		return nil, errors.New("AppendCertsFromPEM failed")
 	}
 	return
+}
+
+func getClientSSHConfit(username, password, key, passphrase string) (*ssh.ClientConfig, error) {
+	sshConf := &ssh.ClientConfig{
+		Auth:            []ssh.AuthMethod{},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	// auth by user and pass
+	if username != "" && password != "" {
+		sshConf.User = username
+		sshConf.Auth = append(sshConf.Auth, ssh.Password(password))
+	}
+
+	// auth by key pair
+	if key != "" {
+		pemBytes, err := os.ReadFile(key)
+		if err != nil {
+			return nil, err
+		}
+		var signer ssh.Signer
+		// privateKey with passphrase
+		if passphrase != "" {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(pemBytes, []byte(passphrase))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			signer, err = ssh.ParsePrivateKey(pemBytes)
+			if err != nil {
+				return nil, err
+			}
+		}
+		sshConf.Auth = append(sshConf.Auth, ssh.PublicKeys(signer))
+	}
+
+	return sshConf, nil
 }
